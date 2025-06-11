@@ -1,0 +1,52 @@
+# Python cache and bytecode
+__pycache__/
+*.py[cod]
+*.so
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# Virtual environments
+venv/
+.env/
+.env.*  # for dotenv files
+
+# Mac & OS files
+.DS_Store
+Thumbs.db
+
+# VSCode and editor settings
+.vscode/
+*.swp
+
+# Logs and local runtime files
+*.log
+*.pid
+*.db
+
+# Data files (optional: include raw if large or sensitive)
+data/raw/
+
+
+# Model outputs (optional — but you're including models)
+# If you want to IGNORE trained models, uncomment the next line
+# *.pkl
+
+# Node modules (for frontend if using React/Vercel)
+frontend/node_modules/
+frontend/.next/
+frontend/.env.local
+
+# Build outputs
+dist/
+build/
+
+# Ignore test coverage and reports
+.coverage
+htmlcov/
+coverage.xml
+
+# Ignore backup files
+*.bak
+*.tmp
+*.old
