@@ -1,5 +1,15 @@
 from fastapi import FastAPI
 from routers import predict
+from utils.constants import TICKER_LIST
+from fastapi import HTTPException
+from utils.features import get_features_for_ticker
+from utils.sentiment import get_sentiment_for_ticker
+from pydantic import BaseModel
+from typing import List
+from routers import compare
+
+class CompareRequest(BaseModel):
+    tickers: List[str]
 
 app = FastAPI(title="StAI- Stock Prediction API",
             description="Predict Stock Prices",
@@ -11,3 +21,25 @@ app.include_router(predict.router)
 async def root():
     return {"message":"StAI - Stock Prediction made easy"}
 
+@app.get("/tickers")
+def get_supported_tickers():
+    return {"tickers": TICKER_LIST}
+
+@app.get("/features/{ticker}")
+def get_features(ticker: str):
+    features=get_features_for_ticker(ticker)
+    if features is None:
+        raise HTTPException(status_code=404, detail="Ticker data not found")
+    return {"ticker": ticker, "features": features}
+
+@app.get("/sentiment/{ticker}")
+def sentiment(ticker:str):
+    result=get_sentiment_for_ticker(ticker)
+    if not result['articles']:
+        raise HTTPException(status_code=404, detail="No news found for ticker")
+    return result
+
+# @app.get("/compare")
+# def compare_ticker(req: CompareRequest):
+
+app.include_router(compare.compare_router)
