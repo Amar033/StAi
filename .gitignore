@@ -10,6 +10,7 @@ __pycache__/
 venv/
 .env/
 .env.*  # for dotenv files
+.env
 
 # Mac & OS files
 .DS_Store
