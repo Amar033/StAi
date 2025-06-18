@@ -7,6 +7,21 @@ from utils.sentiment import get_sentiment_for_ticker
 from pydantic import BaseModel
 from typing import List
 from routers import compare
+from fastapi.middleware.cors import CORSMiddleware
+import yfinance as yf
+from datetime import date
+import logging
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+import numpy as np
+import yfinance as yf
+import pandas as pd
+from datetime import datetime, timedelta
+
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class CompareRequest(BaseModel):
     tickers: List[str]
@@ -14,6 +29,14 @@ class CompareRequest(BaseModel):
 app = FastAPI(title="StAI- Stock Prediction API",
             description="Predict Stock Prices",
             version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001","http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(predict.router)
 

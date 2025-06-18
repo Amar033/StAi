@@ -1,10 +1,27 @@
 import { Activity, BarChart3, DollarSign, Search, TrendingUp } from 'lucide-react';
-import React, { useState } from 'react';
+import { default as React, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import MiniChart from '../components/MiniChart';
+
 
 const Home = () => {
 const [searchQuery, setSearchQuery] = useState('');
 const navigate = useNavigate();
+const [trendingData, setTrendingData] = useState({});
+useEffect(() => {
+  const tickers = ["AAPL", "GOOGL", "TSLA"];
+
+  const fetchAll = async () => {
+    const res = {};
+    for (let t of tickers) {
+      const { data } = await axios.get(`http://localhost:8000/price-history/${t}`);
+      res[t] = data;
+    }
+    setTrendingData(res);
+  };
+
+  fetchAll();
+}, []);
 
 const handleAnalyze = () => {
     if (searchQuery.trim()) {
@@ -73,15 +90,13 @@ return (
                   </div>
                 </div>
                 
-                <div className="h-80 bg-gradient-to-br from-background-700/50 to-background-800/50 rounded-xl border border-background-600/30 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="w-16 h-16 bg-primary-500/20 rounded-full flex items-center justify-center mb-4 mx-auto">
-                      <BarChart3 className="w-8 h-8 text-primary-400" />
-                    </div>
-                    <p className="text-text-300 text-lg font-medium">Interactive Chart</p>
-                    <p className="text-text-500 text-sm mt-1">Search for a stock to view price data</p>
-                  </div>
-                </div>
+                <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+  <MiniChart symbol="AAPL" />
+  <MiniChart symbol="GOOGL" />
+  <MiniChart symbol="TSLA" />
+</div>
+
+
               </div>
             </div>
           </div>
