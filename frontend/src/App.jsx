@@ -1,7 +1,7 @@
 import { Route, BrowserRouter as Router, Routes } from "react-router-dom";
 import DashboardLayout from "./layouts/DashboardLayout";
 import Compare from "./pages/Compare";
-import Home from "./pages/home";
+import Home from "./pages/Home";
 import Insights from "./pages/Insights";
 import SearchResults from "./pages/SearchResults";
 import Sentiment from "./pages/Sentiment";
