@@ -12,4 +12,3 @@ beautifulsoup4
 lxml
 requests
 python-multipart
-fastapi.middleware.cors
