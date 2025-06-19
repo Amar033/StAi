@@ -3,6 +3,7 @@ import { Activity, BarChart3, DollarSign, Search, TrendingUp } from 'lucide-reac
 import { default as React, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MiniChart from '../components/MiniChart';
+const baseURL = import.meta.env.VITE_API_BASE_URL;
 
 const Home = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -26,15 +27,15 @@ const Home = () => {
         for (let ticker of tickers) {
           try {
             // Fetch price history
-            const { data: priceData } = await axios.get(`http://localhost:8000/price-history/${ticker}`);
+            const { data: priceData } = await axios.get(`${baseURL}/price-history/${ticker}`);
             trendingRes[ticker] = priceData;
 
             // Fetch predictions
-            const { data: predictionData } = await axios.get(`http://localhost:8000/predict/${ticker}`);
+            const { data: predictionData } = await axios.get(`${baseURL}/predict/${ticker}`);
             predictionsRes[ticker] = predictionData;
 
             // Fetch sentiment
-            const { data: sentimentInfo } = await axios.get(`http://localhost:8000/sentiment/${ticker}`);
+            const { data: sentimentInfo } = await axios.get(`${baseURL}/sentiment/${ticker}`);
             sentimentRes[ticker] = sentimentInfo;
           } catch (error) {
             console.error(`Error fetching data for ${ticker}:`, error);

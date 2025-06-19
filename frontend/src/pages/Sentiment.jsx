@@ -8,7 +8,7 @@ import {
   Tooltip,
 } from "recharts";
 import NewsCard from "../components/NewsCard";
-
+const baseURL = import.meta.env.VITE_API_BASE_URL;
 const COLORS = {
   positive: "#22c55e",
   neutral: "#facc15",
@@ -26,7 +26,7 @@ const Sentiment = () => {
   useEffect(() => {
     const fetchTickers = async () => {
       try {
-        const res = await axios.get("http://localhost:8000/tickers");
+        const res = await axios.get(`${baseURL}/tickers`);
         setTickers(res.data.tickers || []);
       } catch (err) {
         console.error("Failed to fetch ticker list:", err);
@@ -42,7 +42,7 @@ const Sentiment = () => {
       if (!selectedTicker) return;
       try {
         setLoading(true);
-        const res = await axios.get(`http://localhost:8000/sentiment/${selectedTicker}`);
+        const res = await axios.get(`${baseURL}/sentiment/${selectedTicker}`);
         setSentimentData(res.data);
         setError("");
       } catch (err) {

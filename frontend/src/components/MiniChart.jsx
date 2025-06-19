@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-
+const baseURL = import.meta.env.VITE_API_BASE_URL;
 const MiniChart = ({ symbol }) => {
   const [priceHistory, setPriceHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -8,7 +8,7 @@ const MiniChart = ({ symbol }) => {
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const res = await fetch(`http://localhost:8000/price-history/${symbol}?range=60`);
+        const res = await fetch(`${baseURL}/price-history/${symbol}?range=60`);
         const data = await res.json();
         setPriceHistory(data.history);
       } catch (err) {

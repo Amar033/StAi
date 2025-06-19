@@ -10,6 +10,7 @@ import {
     XAxis,
     YAxis,
 } from "recharts";
+const baseURL = import.meta.env.VITE_API_BASE_URL;
 
 const SearchResults = () => {
     const { symbol } = useParams();
@@ -37,7 +38,7 @@ const SearchResults = () => {
             
             console.log(`Fetching data for symbol: ${symbol}`);
 
-            const response = await axios.get(`http://127.0.0.1:8000/predict/${symbol}`, {
+            const response = await axios.get(`${baseURL}/predict/${symbol}`, {
                 timeout: 30000, // 30 second timeout
                 headers: {
                     'Content-Type': 'application/json',
@@ -54,10 +55,10 @@ const SearchResults = () => {
                 setLastUpdated(new Date());
                 
                 // Fetch price history
-                const historyRes = await axios.get(`http://127.0.0.1:8000/price-history/${symbol}?range=${range}`);
+                const historyRes = await axios.get(`${baseURL}/price-history/${symbol}?range=${range}`);
                 setPriceHistory(historyRes.data.history);
 
-                const sentimentRes = await fetch(`http://127.0.0.1:8000/sentiment/${symbol}`);
+                const sentimentRes = await fetch(`${baseURL}/sentiment/${symbol}`);
                 const sentimentData = await sentimentRes.json();
                 setSentiment(sentimentData);
                 
@@ -277,12 +278,7 @@ const SearchResults = () => {
                     </div>
                     
                     {/* Market Status Indicator */}
-                    {/* <div className="flex items-center gap-2 text-xs">
-                        <div className={`w-2 h-2 rounded-full ${isMarketHours() ? 'bg-green-400' : 'bg-red-400'}`}></div>
-                        <span className="text-text-500">
-                            Market {isMarketHours() ? 'Open' : 'Closed'}
-                        </span>
-                    </div> */}
+                    
                 </div>
             </div>
 

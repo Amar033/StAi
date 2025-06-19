@@ -1,6 +1,6 @@
 import axios from 'axios';
 import React, { useEffect, useState } from 'react';
-
+const baseURL = import.meta.env.VITE_API_BASE_URL;
 const InsightCard = ({ title, tickers, color }) => (
   <div className={`p-4 rounded-xl shadow-lg bg-background-800/60 border-l-4 ${color} mb-6`}>
     <h3 className="text-xl font-semibold mb-2">{title}</h3>
@@ -21,7 +21,7 @@ const Insights = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    axios.get("http://localhost:8000/insights")
+    axios.get(`${baseURL}/insights`)
       .then(res => {
         setInsights(res.data);
         setLoading(false);

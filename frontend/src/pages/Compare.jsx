@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import StockComparisonCard from '../components/StockComparisonCard';
 
-
+const baseURL = import.meta.env.VITE_API_BASE_URL;
 const StockForm = ({ onSubmit }) => {
   const [input, setInput] = useState("");
 
@@ -47,7 +47,7 @@ const Compare = () => {
     await Promise.all(
       symbolsList.map(async (symbol) => {
         try {
-          const res = await fetch(`http://localhost:8000/predict/${symbol}`);
+          const res = await fetch(`${baseURL}/predict/${symbol}`);
           const json = await res.json();
           newData[symbol] = json;
         } catch (e) {
