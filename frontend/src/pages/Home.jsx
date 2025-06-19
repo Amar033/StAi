@@ -1,34 +1,120 @@
+import axios from 'axios';
 import { Activity, BarChart3, DollarSign, Search, TrendingUp } from 'lucide-react';
 import { default as React, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MiniChart from '../components/MiniChart';
 
-
 const Home = () => {
-const [searchQuery, setSearchQuery] = useState('');
-const navigate = useNavigate();
-const [trendingData, setTrendingData] = useState({});
-useEffect(() => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const navigate = useNavigate();
+  const [trendingData, setTrendingData] = useState({});
+  const [predictionsData, setPredictionsData] = useState({});
+  const [sentimentData, setSentimentData] = useState({});
+  const [loading, setLoading] = useState(true);
+
   const tickers = ["AAPL", "GOOGL", "TSLA"];
 
-  const fetchAll = async () => {
-    const res = {};
-    for (let t of tickers) {
-      const { data } = await axios.get(`http://localhost:8000/price-history/${t}`);
-      res[t] = data;
+  useEffect(() => {
+    const fetchAllData = async () => {
+      setLoading(true);
+      try {
+        // Fetch trending data
+        const trendingRes = {};
+        const predictionsRes = {};
+        const sentimentRes = {};
+
+        for (let ticker of tickers) {
+          try {
+            // Fetch price history
+            const { data: priceData } = await axios.get(`http://localhost:8000/price-history/${ticker}`);
+            trendingRes[ticker] = priceData;
+
+            // Fetch predictions
+            const { data: predictionData } = await axios.get(`http://localhost:8000/predict/${ticker}`);
+            predictionsRes[ticker] = predictionData;
+
+            // Fetch sentiment
+            const { data: sentimentInfo } = await axios.get(`http://localhost:8000/sentiment/${ticker}`);
+            sentimentRes[ticker] = sentimentInfo;
+          } catch (error) {
+            console.error(`Error fetching data for ${ticker}:`, error);
+            // Set default values if API fails
+            predictionsRes[ticker] = { prediction: 0, confidence: 0, trend: 'neutral' };
+            sentimentRes[ticker] = { sentiment_score: 0, articles: [] };
+          }
+        }
+
+        setTrendingData(trendingRes);
+        setPredictionsData(predictionsRes);
+        setSentimentData(sentimentRes);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAllData();
+  }, []);
+
+  const handleAnalyze = () => {
+    if (searchQuery.trim()) {
+      navigate(`/search/${searchQuery.trim().toUpperCase()}`);
     }
-    setTrendingData(res);
   };
 
-  fetchAll();
-}, []);
+  // Calculate aggregate metrics
+  const calculateAggregateMetrics = () => {
+    const predictions = Object.values(predictionsData);
+    const sentiments = Object.values(sentimentData);
 
-const handleAnalyze = () => {
-    if (searchQuery.trim()) {
-    navigate(`/search/${searchQuery.trim().toUpperCase()}`);
+    if (predictions.length === 0 || sentiments.length === 0) {
+      return {
+        avgConfidence: 0,
+        bullishCount: 0,
+        avgSentiment: 0,
+        newsCount: 0
+      };
     }
-};
-return (
+    const validConfidences = predictions.map((p) => p.confidence).filter((c) => typeof c === 'number' && !isNaN(c));
+
+    const avgConfidence =validConfidences.length > 0 ? validConfidences.reduce((sum, c) => sum + c, 0) / validConfidences.length: 0;
+
+
+    // const avgConfidence = predictions.reduce((sum, p) => sum + (p.confidence || 0), 0) / predictions.length;
+    const bullishCount = predictions.filter(p => p.trend === 'bullish' || p.trend === 'up').length;
+    const avgSentiment = sentiments.reduce((sum, s) => sum + (s.sentiment_score || 0), 0) / sentiments.length;
+    const newsCount = sentiments.reduce((sum, s) => sum + (s.articles?.length || 0), 0);
+
+    return {
+      avgConfidence: Math.round(avgConfidence),
+      bullishCount,
+      avgSentiment: Math.round(avgSentiment * 100) / 100,
+      newsCount
+    };
+  };
+
+  const metrics = calculateAggregateMetrics();
+
+  // Get best performing prediction
+  const getBestPrediction = () => {
+    const predictions = Object.entries(predictionsData);
+    if (predictions.length === 0) return { ticker: '--', prediction: '--', confidence: 0, trend: '--' };
+
+    const bestPrediction = predictions.reduce((best, [ticker, data]) => {
+      // if ((data.confidence || 0) > (best.confidence || 0)) {
+      if (typeof data.confidence === 'number' && data.confidence > (best.confidence || 0)) {
+        return { ticker, ...data };
+      }
+      return best;
+    }, { ticker: '--', prediction: '--', confidence: 0, trend: '--' });
+
+    return bestPrediction;
+  };
+
+  const bestPrediction = getBestPrediction();
+
+  return (
     <div className="min-h-screen bg-background-950 text-text-50 relative overflow-hidden">
       {/* Background gradient overlay */}
       <div className="absolute inset-0 bg-gradient-to-br from-background-900/50 to-background-950 pointer-events-none"></div>
@@ -82,7 +168,7 @@ return (
                     <div className="p-2 bg-primary-500/20 rounded-lg">
                       <BarChart3 className="w-6 h-6 text-primary-400" />
                     </div>
-                    <h2 className="text-2xl font-semibold text-text-100">Price Chart</h2>
+                    <h2 className="text-2xl font-semibold text-text-100">Price Charts</h2>
                   </div>
                   <div className="flex items-center gap-2 text-accent-400">
                     <TrendingUp className="w-5 h-5" />
@@ -90,18 +176,16 @@ return (
                   </div>
                 </div>
                 
-                <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-  <MiniChart symbol="AAPL" />
-  <MiniChart symbol="GOOGL" />
-  <MiniChart symbol="TSLA" />
-</div>
-
-
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <MiniChart symbol="AAPL" />
+                  <MiniChart symbol="GOOGL" />
+                  <MiniChart symbol="TSLA" />
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Predicted Price Card */}
+          {/* AI Prediction Card */}
           <div className="group">
             <div className="relative">
               <div className="absolute inset-0 bg-gradient-to-br from-accent-500/10 to-secondary-500/10 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
@@ -110,23 +194,40 @@ return (
                   <div className="p-2 bg-accent-500/20 rounded-lg">
                     <DollarSign className="w-6 h-6 text-accent-400" />
                   </div>
-                  <h2 className="text-xl font-semibold text-text-100">AI Prediction</h2>
+                  <h2 className="text-xl font-semibold text-text-100">Top AI Prediction</h2>
                 </div>
                 
                 <div className="text-center">
-                  <div className="text-4xl font-bold bg-gradient-to-r from-accent-400 to-secondary-400 bg-clip-text text-transparent mb-2">
-                    --
-                  </div>
-                  <p className="text-text-400 text-sm mb-4">Next 24h prediction</p>
+                  {loading ? (
+                    <div className="text-2xl font-bold text-text-400 mb-2">Loading...</div>
+                  ) : (
+                    <>
+                      <div className="text-sm text-text-400 mb-2">{bestPrediction.ticker}</div>
+                      <div className="text-4xl font-bold bg-gradient-to-r from-accent-400 to-secondary-400 bg-clip-text text-transparent mb-2">
+                        ${typeof bestPrediction.prediction === 'number' ? bestPrediction.prediction.toFixed(2) : bestPrediction.prediction}
+                      </div>
+                      <p className="text-text-400 text-sm mb-4">Next 24h prediction</p>
+                    </>
+                  )}
                   
                   <div className="space-y-3">
                     <div className="flex justify-between items-center p-3 bg-background-700/50 rounded-lg">
                       <span className="text-text-400 text-sm">Confidence</span>
-                      <span className="text-primary-400 font-medium">--%</span>
+                      <span className="text-primary-400 font-medium">
+                        {loading ? '--' : `${bestPrediction.confidence || 0}%`}
+                      </span>
                     </div>
                     <div className="flex justify-between items-center p-3 bg-background-700/50 rounded-lg">
                       <span className="text-text-400 text-sm">Trend</span>
-                      <span className="text-secondary-400 font-medium">--</span>
+                      <span className={`font-medium ${
+                        bestPrediction.trend === 'bullish' || bestPrediction.trend === 'up' 
+                          ? 'text-green-400' 
+                          : bestPrediction.trend === 'bearish' || bestPrediction.trend === 'down'
+                          ? 'text-red-400'
+                          : 'text-secondary-400'
+                      }`}>
+                        {loading ? '--' : (bestPrediction.trend || 'Neutral').toUpperCase()}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -134,7 +235,7 @@ return (
             </div>
           </div>
 
-          {/* News Sentiment - Full Width */}
+          {/* Market Sentiment - Full Width */}
           <div className="lg:col-span-3 group">
             <div className="relative">
               <div className="absolute inset-0 bg-gradient-to-r from-secondary-500/10 to-primary-500/10 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
@@ -151,23 +252,54 @@ return (
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="text-center p-4 bg-background-700/50 rounded-xl">
-                    <div className="text-2xl font-bold text-accent-400 mb-1">--</div>
+                    <div className="text-2xl font-bold text-accent-400 mb-1">
+                      {loading ? '--' : metrics.bullishCount}
+                    </div>
                     <div className="text-text-400 text-sm">Bullish Signals</div>
                   </div>
                   <div className="text-center p-4 bg-background-700/50 rounded-xl">
-                    <div className="text-2xl font-bold text-primary-400 mb-1">--</div>
-                    <div className="text-text-400 text-sm">Overall Score</div>
+                    <div className="text-2xl font-bold text-primary-400 mb-1">
+                      {loading ? '--' : `${metrics.avgConfidence}%`}
+                    </div>
+                    <div className="text-text-400 text-sm">Avg Confidence</div>
                   </div>
                   <div className="text-center p-4 bg-background-700/50 rounded-xl">
-                    <div className="text-2xl font-bold text-secondary-400 mb-1">--</div>
-                    <div className="text-text-400 text-sm">News Impact</div>
+                    <div className="text-2xl font-bold text-secondary-400 mb-1">
+                      {loading ? '--' : metrics.newsCount}
+                    </div>
+                    <div className="text-text-400 text-sm">News Articles</div>
                   </div>
                 </div>
                 
-                <div className="mt-6 p-4 bg-background-700/30 rounded-xl">
-                  <p className="text-text-300 text-center">
-                    Select a stock symbol to view real-time sentiment analysis and market insights
-                  </p>
+                {/* Individual Ticker Predictions */}
+                <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {tickers.map(ticker => (
+                    <div key={ticker} className="p-4 bg-background-700/30 rounded-xl">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="font-medium text-text-200">{ticker}</span>
+                        <span className={`text-sm font-medium ${
+                          loading ? 'text-text-400' :
+                          (predictionsData[ticker]?.trend === 'bullish' || predictionsData[ticker]?.trend === 'up') 
+                            ? 'text-green-400' 
+                            : (predictionsData[ticker]?.trend === 'bearish' || predictionsData[ticker]?.trend === 'down')
+                            ? 'text-red-400'
+                            : 'text-yellow-400'
+                        }`}>
+                          {loading ? '--' : predictionsData[ticker]?.trend?.toUpperCase() || 'NEUTRAL'}
+                        </span>
+                      </div>
+                      <div className="text-lg font-bold text-accent-400">
+                        ${loading ? '--' : 
+                          typeof predictionsData[ticker]?.prediction === 'number' 
+                            ? predictionsData[ticker].prediction.toFixed(2) 
+                            : predictionsData[ticker]?.prediction || '--'
+                        }
+                      </div>
+                      <div className="text-sm text-text-400">
+                        Confidence: {loading ? '--' : `${predictionsData[ticker]?.confidence || 0}%`}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

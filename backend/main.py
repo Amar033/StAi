@@ -17,6 +17,7 @@ import numpy as np
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
+from routers import insights
 
 
 
@@ -66,3 +67,6 @@ def sentiment(ticker:str):
 # def compare_ticker(req: CompareRequest):
 
 app.include_router(compare.compare_router)
+
+
+app.include_router(insights.insights_router)

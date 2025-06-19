@@ -5,9 +5,10 @@ const Sidebar = () => {
   const navItems = [
     { to: "/", icon: LayoutDashboard, label: "Dashboard" },
     // { to: "/search/AAPL", icon: Search, label: "Search" },
-    { to: "/insights", icon: DollarSign, label: "Insights" },
+    
     { to: "/compare", icon: BarChart3, label: "Compare" },
-    { to: "/sentiment", icon: Activity, label: "Sentiment" }
+    { to: "/sentiment", icon: Activity, label: "Sentiment" },
+    { to: "/insights", icon: DollarSign, label: "Insights" },
   ];
 
   return (
