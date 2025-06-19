@@ -277,12 +277,12 @@ const SearchResults = () => {
                     </div>
                     
                     {/* Market Status Indicator */}
-                    <div className="flex items-center gap-2 text-xs">
+                    {/* <div className="flex items-center gap-2 text-xs">
                         <div className={`w-2 h-2 rounded-full ${isMarketHours() ? 'bg-green-400' : 'bg-red-400'}`}></div>
                         <span className="text-text-500">
                             Market {isMarketHours() ? 'Open' : 'Closed'}
                         </span>
-                    </div>
+                    </div> */}
                 </div>
             </div>
 
