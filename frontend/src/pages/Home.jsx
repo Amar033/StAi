@@ -63,55 +63,98 @@ const Home = () => {
     }
   };
 
-  // Calculate aggregate metrics
-  const calculateAggregateMetrics = () => {
-    const predictions = Object.values(predictionsData);
-    const sentiments = Object.values(sentimentData);
+  // Fixed calculateAggregateMetrics function for Home.jsx
 
-    if (predictions.length === 0 || sentiments.length === 0) {
-      return {
-        avgConfidence: 0,
-        bullishCount: 0,
-        avgSentiment: 0,
-        newsCount: 0
-      };
-    }
-    const validConfidences = predictions.map((p) => p.confidence).filter((c) => typeof c === 'number' && !isNaN(c));
+const calculateAggregateMetrics = () => {
+  const predictions = Object.values(predictionsData);
+  const sentiments = Object.values(sentimentData);
 
-    const avgConfidence =validConfidences.length > 0 ? validConfidences.reduce((sum, c) => sum + c, 0) / validConfidences.length: 0;
-
-
-    // const avgConfidence = predictions.reduce((sum, p) => sum + (p.confidence || 0), 0) / predictions.length;
-    const bullishCount = predictions.filter(p => p.trend === 'bullish' || p.trend === 'up').length;
-    const avgSentiment = sentiments.reduce((sum, s) => sum + (s.sentiment_score || 0), 0) / sentiments.length;
-    const newsCount = sentiments.reduce((sum, s) => sum + (s.articles?.length || 0), 0);
-
+  if (predictions.length === 0 || sentiments.length === 0) {
     return {
-      avgConfidence: Math.round(avgConfidence),
-      bullishCount,
-      avgSentiment: Math.round(avgSentiment * 100) / 100,
-      newsCount
+      avgConfidence: 0,
+      bullishCount: 0,
+      avgSentiment: 0,
+      newsCount: 0
     };
-  };
+  }
 
-  const metrics = calculateAggregateMetrics();
-
-  // Get best performing prediction
-  const getBestPrediction = () => {
-    const predictions = Object.entries(predictionsData);
-    if (predictions.length === 0) return { ticker: '--', prediction: '--', confidence: 0, trend: '--' };
-
-    const bestPrediction = predictions.reduce((best, [ticker, data]) => {
-      // if ((data.confidence || 0) > (best.confidence || 0)) {
-      if (typeof data.confidence === 'number' && data.confidence > (best.confidence || 0)) {
-        return { ticker, ...data };
+  // Extract and normalize confidence values
+  const validConfidences = predictions
+    .map((p) => {
+      let confidence = p.confidence;
+      // Handle confidence as string (e.g., "85%")
+      if (typeof confidence === 'string') {
+        confidence = parseFloat(confidence.replace('%', ''));
       }
-      return best;
-    }, { ticker: '--', prediction: '--', confidence: 0, trend: '--' });
+      // Handle confidence as number
+      if (typeof confidence === 'number' && !isNaN(confidence)) {
+        // If confidence is between 0-1, convert to percentage
+        if (confidence <= 1) {
+          confidence = confidence * 100;
+        }
+        return confidence;
+      }
+      return null;
+    })
+    .filter((c) => c !== null && c >= 0 && c <= 100);
 
-    return bestPrediction;
+  const avgConfidence = validConfidences.length > 0 
+    ? Math.round(validConfidences.reduce((sum, c) => sum + c, 0) / validConfidences.length)
+    : 0;
+
+  const bullishCount = predictions.filter(p => 
+    p.trend === 'bullish' || p.trend === 'up' || p.trend === 'Bullish'
+  ).length;
+
+  const avgSentiment = sentiments.reduce((sum, s) => sum + (s.sentiment_score || 0), 0) / sentiments.length;
+  const newsCount = sentiments.reduce((sum, s) => sum + (s.articles?.length || 0), 0);
+
+  return {
+    avgConfidence,
+    bullishCount,
+    avgSentiment: Math.round(avgSentiment * 100) / 100,
+    newsCount
   };
+};
 
+// Also fix the getBestPrediction function
+const getBestPrediction = () => {
+  const predictions = Object.entries(predictionsData);
+  if (predictions.length === 0) return { ticker: '--', prediction: '--', confidence: 0, trend: '--' };
+
+  const bestPrediction = predictions.reduce((best, [ticker, data]) => {
+    let confidence = data.confidence;
+    
+    // Handle confidence as string (e.g., "85%")
+    if (typeof confidence === 'string') {
+      confidence = parseFloat(confidence.replace('%', ''));
+    }
+    
+    // Handle confidence as number
+    if (typeof confidence === 'number' && !isNaN(confidence)) {
+      // If confidence is between 0-1, convert to percentage
+      if (confidence <= 1) {
+        confidence = confidence * 100;
+      }
+      
+      let bestConfidence = best.confidence;
+      if (typeof bestConfidence === 'string') {
+        bestConfidence = parseFloat(bestConfidence.replace('%', ''));
+      }
+      if (bestConfidence <= 1) {
+        bestConfidence = bestConfidence * 100;
+      }
+      
+      if (confidence > (bestConfidence || 0)) {
+        return { ticker, ...data, confidence };
+      }
+    }
+    return best;
+  }, { ticker: '--', prediction: '--', confidence: 0, trend: '--' });
+
+  return bestPrediction;
+};
+const metrics = calculateAggregateMetrics();
   const bestPrediction = getBestPrediction();
 
   return (
