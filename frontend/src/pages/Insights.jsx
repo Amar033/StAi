@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { Activity, AlertTriangle, BarChart3, Target, TrendingUp, Zap } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 
 const baseURL = import.meta.env.VITE_API_BASE_URL;
@@ -8,130 +9,171 @@ const StockCard = ({ stock, type }) => {
     switch(type) {
       case 'bullish':
         return {
-          bgGradient: 'from-green-500/20 to-emerald-600/20',
-          borderColor: 'border-green-400',
+          gradient: 'from-green-500/20 to-emerald-600/20',
+          borderColor: 'border-green-500/30',
           textColor: 'text-green-400',
-          icon: '📈',
-          badgeColor: 'bg-green-500/20 text-green-300'
+          icon: TrendingUp,
+          iconBg: 'bg-green-500/20',
+          title: 'BULLISH'
         };
       case 'buy':
         return {
-          bgGradient: 'from-blue-500/20 to-cyan-600/20',
-          borderColor: 'border-blue-400',
-          textColor: 'text-blue-400',
-          icon: '💎',
-          badgeColor: 'bg-blue-500/20 text-blue-300'
+          gradient: 'from-primary-500/20 to-secondary-500/20',
+          borderColor: 'border-primary-500/30',
+          textColor: 'text-primary-400',
+          icon: Target,
+          iconBg: 'bg-primary-500/20',
+          title: 'BUY'
         };
       case 'underperforming':
         return {
-          bgGradient: 'from-red-500/20 to-rose-600/20',
-          borderColor: 'border-red-400',
+          gradient: 'from-red-500/20 to-rose-600/20',
+          borderColor: 'border-red-500/30',
           textColor: 'text-red-400',
-          icon: '📉',
-          badgeColor: 'bg-red-500/20 text-red-300'
+          icon: AlertTriangle,
+          iconBg: 'bg-red-500/20',
+          title: 'WATCH'
         };
       default:
         return {
-          bgGradient: 'from-gray-500/20 to-slate-600/20',
-          borderColor: 'border-gray-400',
-          textColor: 'text-gray-400',
-          icon: '📊',
-          badgeColor: 'bg-gray-500/20 text-gray-300'
+          gradient: 'from-background-700/20 to-background-600/20',
+          borderColor: 'border-background-600/30',
+          textColor: 'text-text-400',
+          icon: BarChart3,
+          iconBg: 'bg-background-600/20',
+          title: 'NEUTRAL'
         };
     }
   };
 
   const config = getTypeConfig(type);
+  const IconComponent = config.icon;
+  
   const priceChange = stock.predicted_price && stock.current_price 
     ? ((stock.predicted_price - stock.current_price) / stock.current_price * 100).toFixed(2)
     : null;
 
+  // Handle confidence display
+  let displayConfidence = stock.confidence || 0;
+  if (typeof displayConfidence === 'string') {
+    displayConfidence = parseFloat(displayConfidence.replace('%', ''));
+  }
+  if (displayConfidence <= 1) {
+    displayConfidence = displayConfidence * 100;
+  }
+
   return (
-    <div className={`relative overflow-hidden rounded-xl bg-gradient-to-br ${config.bgGradient} backdrop-blur-sm border ${config.borderColor} p-4 transition-all duration-300 hover:scale-105 hover:shadow-xl`}>
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center space-x-2">
-          <span className="text-2xl">{config.icon}</span>
-          <div>
-            <h3 className="text-lg font-bold text-white">{stock.ticker || 'Unknown'}</h3>
-            {stock.trend && (
-              <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${config.badgeColor}`}>
-                {stock.trend}
+    <div className="group relative">
+      <div className={`absolute inset-0 bg-gradient-to-br ${config.gradient} rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500`}></div>
+      <div className={`relative p-6 bg-background-800/60 backdrop-blur-sm rounded-2xl border ${config.borderColor} hover:border-opacity-50 transition-all duration-300`}>
+        
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className={`p-2 ${config.iconBg} rounded-lg`}>
+              <IconComponent className={`w-5 h-5 ${config.textColor}`} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-text-100">{stock.ticker || 'Unknown'}</h3>
+              <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${config.iconBg} ${config.textColor}`}>
+                {config.title}
               </span>
-            )}
-          </div>
-        </div>
-        {stock.confidence && (
-          <div className="text-right">
-            <div className="text-xs text-gray-400">Confidence</div>
-            <div className={`text-sm font-semibold ${config.textColor}`}>
-              {(stock.confidence * 100).toFixed(0)}%
             </div>
           </div>
-        )}
-      </div>
+          
+          {displayConfidence > 0 && (
+            <div className="text-right">
+              <div className="text-xs text-text-400 mb-1">Confidence</div>
+              <div className={`text-lg font-bold ${config.textColor}`}>
+                {Math.round(displayConfidence)}%
+              </div>
+            </div>
+          )}
+        </div>
 
-      <div className="grid grid-cols-2 gap-4 text-sm">
-        {stock.current_price && (
-          <div>
-            <div className="text-gray-400">Current Price</div>
-            <div className="text-white font-semibold">${stock.current_price}</div>
-          </div>
-        )}
-        {stock.predicted_price && (
-          <div>
-            <div className="text-gray-400">Target Price</div>
-            <div className={`font-semibold ${config.textColor}`}>${stock.predicted_price}</div>
-          </div>
-        )}
-      </div>
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          {stock.current_price && (
+            <div className="p-3 bg-background-700/50 rounded-xl">
+              <div className="text-xs text-text-400 mb-1">Current</div>
+              <div className="text-text-100 font-semibold">${stock.current_price}</div>
+            </div>
+          )}
+          {stock.predicted_price && (
+            <div className="p-3 bg-background-700/50 rounded-xl">
+              <div className="text-xs text-text-400 mb-1">Target</div>
+              <div className={`font-semibold ${config.textColor}`}>${stock.predicted_price}</div>
+            </div>
+          )}
+        </div>
 
-      {priceChange && (
-        <div className="mt-3 pt-3 border-t border-gray-600/30">
-          <div className="flex items-center justify-between">
-            <span className="text-gray-400 text-xs">Potential Return</span>
+        {priceChange && (
+          <div className="flex items-center justify-between p-3 bg-background-700/30 rounded-xl">
+            <span className="text-text-400 text-sm">Potential Return</span>
             <span className={`text-sm font-bold ${priceChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               {priceChange >= 0 ? '+' : ''}{priceChange}%
             </span>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Decorative element */}
-      <div className={`absolute top-0 right-0 w-20 h-20 ${config.bgGradient} opacity-10 rounded-full -translate-y-10 translate-x-10`}></div>
+        {stock.trend && (
+          <div className="mt-3 flex items-center justify-center">
+            <div className={`px-3 py-1 rounded-full text-xs font-medium ${config.iconBg} ${config.textColor}`}>
+              {stock.trend.toUpperCase()}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
 
-const MarketSummaryCard = ({ title, value, change, icon, color }) => (
-  <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 border border-gray-700">
-    <div className="flex items-center justify-between">
-      <div>
-        <div className="text-gray-400 text-sm">{title}</div>
-        <div className="text-white text-xl font-bold">{value}</div>
-        {change && (
-          <div className={`text-sm font-medium ${change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {change >= 0 ? '+' : ''}{change}%
-          </div>
-        )}
+const MetricCard = ({ title, value, subtitle, icon: Icon, color }) => (
+  <div className="group relative">
+    <div className={`absolute inset-0 bg-gradient-to-br ${color}/10 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500`}></div>
+    <div className="relative p-6 bg-background-800/60 backdrop-blur-sm rounded-2xl border border-background-600/30 hover:border-opacity-50 transition-all duration-300">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-text-400 text-sm mb-1">{title}</div>
+          <div className={`text-3xl font-bold ${color} mb-1`}>{value}</div>
+          {subtitle && <div className="text-text-400 text-xs">{subtitle}</div>}
+        </div>
+        <div className={`p-3 bg-${color.split('-')[1]}-500/20 rounded-xl`}>
+          <Icon className={`w-6 h-6 ${color}`} />
+        </div>
       </div>
-      <div className={`text-3xl ${color}`}>{icon}</div>
     </div>
   </div>
 );
 
-const InsightSection = ({ title, stocks, type, description }) => (
-  <div className="mb-8">
-    <div className="mb-4">
-      <h2 className="text-2xl font-bold text-white mb-2">{title}</h2>
-      <p className="text-gray-400 text-sm">{description}</p>
+const InsightSection = ({ title, stocks, type, description, icon: Icon, color }) => (
+  <div className="mb-12">
+    <div className="group relative mb-6">
+      <div className={`absolute inset-0 bg-gradient-to-r ${color}/10 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500`}></div>
+      <div className="relative p-6 bg-background-800/60 backdrop-blur-sm rounded-2xl border border-background-600/30">
+        <div className="flex items-center gap-3 mb-2">
+          <div className={`p-2 bg-${color.split('-')[1]}-500/20 rounded-lg`}>
+            <Icon className={`w-6 h-6 ${color}`} />
+          </div>
+          <h2 className="text-2xl font-semibold text-text-100">{title}</h2>
+          <div className={`ml-auto px-3 py-1 bg-${color.split('-')[1]}-500/20 ${color} rounded-full text-sm font-medium`}>
+            {stocks.length} stocks
+          </div>
+        </div>
+        <p className="text-text-400">{description}</p>
+      </div>
     </div>
+
     {stocks.length === 0 ? (
-      <div className="bg-gray-800/30 rounded-xl p-8 text-center border border-gray-700">
-        <div className="text-4xl mb-2">📊</div>
-        <p className="text-gray-400">No data available at this time</p>
+      <div className="group relative">
+        <div className="absolute inset-0 bg-gradient-to-br from-background-700/20 to-background-600/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+        <div className="relative p-12 bg-background-800/60 backdrop-blur-sm rounded-2xl border border-background-600/30 text-center">
+          <div className="p-4 bg-background-700/50 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+            <BarChart3 className="w-8 h-8 text-text-400" />
+          </div>
+          <p className="text-text-400">No data available for this category</p>
+        </div>
       </div>
     ) : (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {stocks.map((stock, index) => (
           <StockCard key={stock.ticker || index} stock={stock} type={type} />
         ))}
@@ -155,104 +197,128 @@ const Insights = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
-          <p className="text-gray-400">Analyzing market data...</p>
+      <div className="min-h-screen bg-background-950 text-text-50 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-background-900/50 to-background-950 pointer-events-none"></div>
+        <div className="relative z-10 flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <div className="p-4 bg-primary-500/20 rounded-full w-16 h-16 mx-auto mb-6 flex items-center justify-center">
+              <Activity className="w-8 h-8 text-primary-400 animate-pulse" />
+            </div>
+            <h2 className="text-xl font-semibold text-text-100 mb-2">Analyzing Market Data</h2>
+            <p className="text-text-400">Gathering insights from multiple sources...</p>
+          </div>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
-      {/* Header */}
-      <div className="bg-gray-900/80 backdrop-blur-sm border-b border-gray-700 sticky top-0 z-10">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                AI Stock Analysis
-              </h1>
-              <p className="text-gray-400 mt-1">Real-time insights powered by machine learning</p>
-            </div>
-            <div className="text-right">
-              <div className="text-gray-400 text-sm">Last Updated</div>
-              <div className="text-white font-medium">{new Date().toLocaleTimeString()}</div>
-            </div>
-          </div>
-        </div>
-      </div>
+  const totalStocks = (insights?.top_bullish?.length || 0) + 
+                    (insights?.potential_buys?.length || 0) + 
+                    (insights?.underperforming?.length || 0);
 
-      <div className="container mx-auto px-6 py-8">
+  return (
+    <div className="min-h-screen bg-background-950 text-text-50 relative overflow-hidden">
+      {/* Background gradient overlay */}
+      <div className="absolute inset-0 bg-gradient-to-br from-background-900/50 to-background-950 pointer-events-none"></div>
+      
+      <div className="relative z-10 p-6 max-w-7xl mx-auto">
+        {/* Header */}
+        <header className="text-center mb-12">
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <div className="p-3 bg-accent-500/20 rounded-full border border-accent-500/30">
+              <Zap className="w-8 h-8 text-accent-400" />
+            </div>
+            <h1 className="text-5xl font-bold bg-gradient-to-r from-primary-400 via-secondary-400 to-accent-400 bg-clip-text text-transparent">
+              AI Insights
+            </h1>
+          </div>
+          <p className="text-xl text-text-300 font-medium">Market Intelligence Dashboard</p>
+          <p className="text-text-400 mt-2">Real-time analysis powered by machine learning</p>
+        </header>
+
         {!insights ? (
-          <div className="text-center py-16">
-            <div className="text-6xl mb-4">📊</div>
-            <h2 className="text-xl font-semibold text-white mb-2">Unable to Load Market Data</h2>
-            <p className="text-gray-400">Please check your connection and try again</p>
+          <div className="group relative">
+            <div className="absolute inset-0 bg-gradient-to-br from-red-500/10 to-rose-600/10 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+            <div className="relative text-center py-16 bg-background-800/60 backdrop-blur-sm rounded-2xl border border-background-600/30">
+              <div className="p-4 bg-red-500/20 rounded-full w-16 h-16 mx-auto mb-6 flex items-center justify-center">
+                <AlertTriangle className="w-8 h-8 text-red-400" />
+              </div>
+              <h2 className="text-xl font-semibold text-text-100 mb-2">Unable to Load Market Data</h2>
+              <p className="text-text-400">Please check your connection and try again</p>
+            </div>
           </div>
         ) : (
           <>
             {/* Market Summary */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-              <MarketSummaryCard 
+            <section className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
+              <MetricCard 
                 title="Bullish Signals" 
                 value={insights.top_bullish?.length || 0}
-                icon="🔥" 
+                subtitle="Strong momentum"
+                icon={TrendingUp}
                 color="text-green-400"
               />
-              <MarketSummaryCard 
+              <MetricCard 
                 title="Buy Opportunities" 
                 value={insights.potential_buys?.length || 0}
-                icon="💎" 
-                color="text-blue-400"
+                subtitle="Undervalued picks"
+                icon={Target}
+                color="text-primary-400"
               />
-              <MarketSummaryCard 
-                title="Underperforming" 
+              <MetricCard 
+                title="Watch List" 
                 value={insights.underperforming?.length || 0}
-                icon="⚠️" 
+                subtitle="Need attention"
+                icon={AlertTriangle}
                 color="text-red-400"
               />
-              <MarketSummaryCard 
+              <MetricCard 
                 title="Total Analyzed" 
-                value={(insights.top_bullish?.length || 0) + (insights.potential_buys?.length || 0) + (insights.underperforming?.length || 0)}
-                icon="📈" 
-                color="text-purple-400"
+                value={totalStocks}
+                subtitle="Live tracking"
+                icon={BarChart3}
+                color="text-accent-400"
               />
-            </div>
+            </section>
 
             {/* Insights Sections */}
             <InsightSection 
               title="🔥 Top Bullish Stocks"
-              description="Stocks showing strong upward momentum and positive market sentiment"
+              description="Stocks showing strong upward momentum with positive technical indicators and market sentiment"
               stocks={insights.top_bullish || []}
               type="bullish"
+              icon={TrendingUp}
+              color="text-green-400"
             />
 
             <InsightSection 
-              title="💎 Potential Buy Opportunities"
-              description="Undervalued stocks with strong fundamentals and growth potential"
+              title="💎 Premium Buy Opportunities"
+              description="Carefully selected undervalued stocks with strong fundamentals and growth potential"
               stocks={insights.potential_buys || []}
               type="buy"
+              icon={Target}
+              color="text-primary-400"
             />
 
             <InsightSection 
-              title="⚠️ Underperforming Stocks"
-              description="Stocks experiencing challenges or showing bearish patterns"
+              title="⚠️ Stocks to Watch"
+              description="Stocks experiencing volatility or showing bearish patterns that require attention"
               stocks={insights.underperforming || []}
               type="underperforming"
+              icon={AlertTriangle}
+              color="text-red-400"
             />
           </>
         )}
-      </div>
 
-      {/* Footer */}
-      <div className="bg-gray-900/80 backdrop-blur-sm border-t border-gray-700 mt-12">
-        <div className="container mx-auto px-6 py-4">
-          <div className="text-center text-gray-400 text-sm">
-            <p>⚠️ This analysis is for informational purposes only and should not be considered as financial advice.</p>
+        {/* Footer */}
+        <footer className="mt-16 text-center">
+          <div className="inline-flex items-center gap-2 px-6 py-3 bg-background-800/40 backdrop-blur-sm rounded-full border border-background-600/30">
+            <span className="text-text-400">⚠️ AI-generated insights for research purposes only</span>
+            <span className="text-primary-400">•</span>
+            <span className="text-text-400">Not financial advice</span>
           </div>
-        </div>
+        </footer>
       </div>
     </div>
   );
