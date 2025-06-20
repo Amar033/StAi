@@ -39,22 +39,23 @@
 ---
 
 ## 📁 Project Structure
-
+```
 StAI/
 ├── backend/
-│ ├── main.py # FastAPI entry point
-│ ├── routers/ # API routes (predict, compare, insights, etc.)
-│ ├── models/ # Trained .pkl ML models + scalers
-│ ├── utils/ # Feature engineering, sentiment scraping
-│ └── requirements.txt # Backend dependencies
+│   ├── main.py               # FastAPI entry point
+│   ├── routers/              # API routes (predict, compare, insights, etc.)
+│   ├── models/               # Trained .pkl ML models + scalers
+│   ├── utils/                # Feature engineering, sentiment scraping
+│   └── requirements.txt      # Backend dependencies
 ├── frontend/
-│ ├── src/
-│ │ ├── components/ # UI Components (MiniChart, InsightSection, etc.)
-│ │ ├── pages/ # Home.jsx, SearchResults.jsx, Compare.jsx, etc.
-│ │ ├── App.jsx # Main app routing
-│ │ └── index.jsx # Vite entry
-│ ├── public/ # Favicon, static assets
-│ └── vite.config.js # Vite + environment setup
+│   ├── src/
+│   │   ├── components/       # UI Components (MiniChart, InsightSection, etc.)
+│   │   ├── pages/            # Home.jsx, SearchResults.jsx, Compare.jsx, etc.
+│   │   ├── App.jsx           # Main app routing
+│   │   └── index.jsx         # Vite entry
+│   ├── public/               # Favicon, static assets
+│   └── vite.config.js        # Vite + environment setup
+```
 
 
 ## 👨‍💻 Author
