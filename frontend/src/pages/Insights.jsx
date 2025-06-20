@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Activity, AlertTriangle, BarChart3, Target, TrendingUp, Zap } from 'lucide-react';
+import { Activity, AlertTriangle, BarChart3, Target, TrendingUp } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 
 const baseURL = import.meta.env.VITE_API_BASE_URL;
@@ -223,18 +223,14 @@ const Insights = () => {
       
       <div className="relative z-10 p-6 max-w-7xl mx-auto">
         {/* Header */}
-        <header className="text-center mb-12">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="p-3 bg-accent-500/20 rounded-full border border-accent-500/30">
-              <Zap className="w-8 h-8 text-accent-400" />
-            </div>
-            <h1 className="text-5xl font-bold bg-gradient-to-r from-primary-400 via-secondary-400 to-accent-400 bg-clip-text text-transparent">
-              AI Insights
-            </h1>
-          </div>
-          <p className="text-xl text-text-300 font-medium">Market Intelligence Dashboard</p>
-          <p className="text-text-400 mt-2">Real-time analysis powered by machine learning</p>
-        </header>
+        <header className="mb-10">
+  <h1 className="text-4xl font-bold bg-gradient-to-r from-primary-400 via-secondary-400 to-accent-400 bg-clip-text text-transparent mb-2">
+    AI Insights
+  </h1>
+  <p className="text-text-300 text-lg font-medium">Market Intelligence Dashboard</p>
+  <p className="text-text-400 mt-1">Real-time analysis powered by machine learning</p>
+</header>
+
 
         {!insights ? (
           <div className="group relative">
@@ -283,7 +279,7 @@ const Insights = () => {
 
             {/* Insights Sections */}
             <InsightSection 
-              title="🔥 Top Bullish Stocks"
+              title="Top Bullish Stocks"
               description="Stocks showing strong upward momentum with positive technical indicators and market sentiment"
               stocks={insights.top_bullish || []}
               type="bullish"
@@ -292,7 +288,7 @@ const Insights = () => {
             />
 
             <InsightSection 
-              title="💎 Premium Buy Opportunities"
+              title="Premium Buy Opportunities"
               description="Carefully selected undervalued stocks with strong fundamentals and growth potential"
               stocks={insights.potential_buys || []}
               type="buy"
@@ -301,7 +297,7 @@ const Insights = () => {
             />
 
             <InsightSection 
-              title="⚠️ Stocks to Watch"
+              title="Stocks to Watch"
               description="Stocks experiencing volatility or showing bearish patterns that require attention"
               stocks={insights.underperforming || []}
               type="underperforming"
@@ -314,7 +310,7 @@ const Insights = () => {
         {/* Footer */}
         <footer className="mt-16 text-center">
           <div className="inline-flex items-center gap-2 px-6 py-3 bg-background-800/40 backdrop-blur-sm rounded-full border border-background-600/30">
-            <span className="text-text-400">⚠️ AI-generated insights for research purposes only</span>
+            <span className="text-text-400">AI-generated insights for research purposes only</span>
             <span className="text-primary-400">•</span>
             <span className="text-text-400">Not financial advice</span>
           </div>
