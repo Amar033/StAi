@@ -1,54 +1,3 @@
-# import requests
-# import random
-# import os
-# from dotenv import load_dotenv
-# import joblib
-
-# load_dotenv()
-
-# NEWS_API_KEY=os.getenv('NEWS_API_KEY')
-# script_dir = os.path.dirname(os.path.abspath(__file__))
-# sentiment_model = joblib.load(os.path.join(script_dir, "model", "logistic_model.pkl"))
-# vectorizer = joblib.load(os.path.join(script_dir, "model", "tfidf_vectorizer.pkl"))
-
-
-# def fetch_news(ticker:str , page_size=5):
-#     url=(
-#         f"https://newsapi.org/v2/everything?q={ticker}&sortBy=publishedAt&pageSize={page_size}&language=en&apiKey={NEWS_API_KEY}"
-#     )
-#     r= requests.get(url)
-#     if r.status_code != 200:
-#         return []
-#     return r.json().get("articles",[])
-
-# def analyze_sentiment(texts):
-#     x=vectorizer.transform(texts)
-#     preds=sentiment_model.predict(x)
-#     return ["negative" if p==0 else "positive" for p in preds]
-
-# def get_sentiment_for_ticker(ticker:str):
-#     articles=fetch_news(ticker)
-#     headlines=[a['title'] for a in articles]
-#     sentiments=analyze_sentiment(headlines)
-#     summary={
-#         "positive":sentiments.count('positive'),
-#         "neutral":sentiments.count('neutral'),
-#         "negative":sentiments.count('negative')
-#     }
-#     return {
-#         "ticker":ticker.upper(),
-#         "summary":summary,
-#         "articles":[
-#             {
-#                 "title":a["title"],
-#                 "url":a.get("url"),
-#                 "source":a["source"]["name"],
-#                 "sentiment":s
-#             }
-#             for a,s in zip(articles,sentiments)
-#         ]
-#     }
-
 import requests
 import random
 import os
@@ -58,9 +7,28 @@ import joblib
 load_dotenv()
 
 NEWS_API_KEY = os.getenv('NEWS_API_KEY')
+
+# Get the current script directory (utils folder)
 script_dir = os.path.dirname(os.path.abspath(__file__))
-sentiment_model = joblib.load(os.path.join(script_dir, "model", "logistic_model.pkl"))
-vectorizer = joblib.load(os.path.join(script_dir, "model", "tfidf_vectorizer.pkl"))
+# Get the project root (parent of utils)
+project_root = os.path.dirname(script_dir)
+
+# Load sentiment models with correct paths - models are inside utils/models
+sentiment_model_path = os.path.join(script_dir, "models", "logistic_model.pkl")
+vectorizer_path = os.path.join(script_dir, "models", "tfidf_vectorizer.pkl")
+
+print(f"Looking for sentiment model at: {sentiment_model_path}")
+print(f"Looking for vectorizer at: {vectorizer_path}")
+
+try:
+    sentiment_model = joblib.load(sentiment_model_path)
+    vectorizer = joblib.load(vectorizer_path)
+    print("Sentiment models loaded successfully!")
+except FileNotFoundError as e:
+    print(f"Warning: Could not load sentiment models - {e}")
+    print("Please ensure the model files are in the utils/models/ directory")
+    sentiment_model = None
+    vectorizer = None
 
 # Stock ticker to company/index name mapping
 TICKER_MAPPING = {
@@ -99,25 +67,19 @@ TICKER_MAPPING = {
     "^GDAXI": "DAX",
     "^N225": "Nikkei 225",
     
-    # Crypto (some platforms use different prefixes)
+    # Crypto
     "BTC-USD": "Bitcoin",
     "ETH-USD": "Ethereum",
-    
-    # Add more mappings as needed
 }
 
 def get_search_terms(ticker: str):
     """Generate search terms for better news retrieval"""
-    # Clean ticker for search
     clean_ticker = ticker.replace('.NS', '').replace('.BO', '').replace('^', '')
     
-    # Check if it's a known ticker/index
     if ticker in TICKER_MAPPING:
         name = TICKER_MAPPING[ticker]
         
-        # Different search strategies for indices vs stocks
         if ticker.startswith('^'):
-            # For market indices
             return [
                 f'"{name}" index',
                 f'{name} market',
@@ -125,7 +87,6 @@ def get_search_terms(ticker: str):
                 name
             ]
         elif ticker.endswith('.NS') or ticker.endswith('.BO'):
-            # For Indian stocks
             return [
                 f'"{name}" stock',
                 f'"{name}" India',
@@ -133,7 +94,6 @@ def get_search_terms(ticker: str):
                 clean_ticker
             ]
         else:
-            # For other stocks/assets
             return [
                 f'"{name}" stock',
                 f'{name} shares',
@@ -141,7 +101,6 @@ def get_search_terms(ticker: str):
                 clean_ticker
             ]
     
-    # For unknown tickers, use generic search terms
     if ticker.startswith('^'):
         return [
             f'{clean_ticker} index',
@@ -158,21 +117,33 @@ def get_search_terms(ticker: str):
 
 def fetch_news(ticker: str, page_size=10):
     """Fetch news with improved search strategy"""
+    if not NEWS_API_KEY:
+        print("Warning: NEWS_API_KEY not found in environment variables")
+        return []
+        
     search_terms = get_search_terms(ticker)
     all_articles = []
     
-    # Try different search terms
     for term in search_terms:
         url = (
             f"https://newsapi.org/v2/everything?q={term}&sortBy=publishedAt&pageSize={page_size}&language=en&apiKey={NEWS_API_KEY}"
         )
         
-        r = requests.get(url)
-        if r.status_code == 200:
-            articles = r.json().get("articles", [])
-            if articles:
-                all_articles.extend(articles)
-                break  # Stop if we found articles with this search term
+        try:
+            r = requests.get(url, timeout=10)
+            if r.status_code == 200:
+                articles = r.json().get("articles", [])
+                if articles:
+                    all_articles.extend(articles)
+                    break
+            elif r.status_code == 429:
+                print("API rate limit exceeded")
+                break
+            else:
+                print(f"API request failed with status code: {r.status_code}")
+        except requests.RequestException as e:
+            print(f"Request failed for term '{term}': {e}")
+            continue
     
     # Remove duplicates based on title
     seen_titles = set()
@@ -187,6 +158,9 @@ def fetch_news(ticker: str, page_size=10):
 
 def fetch_news_alternative_sources(ticker: str, page_size=5):
     """Alternative approach using multiple news sources"""
+    if not NEWS_API_KEY:
+        return []
+        
     search_terms = get_search_terms(ticker)
     articles = []
     
@@ -199,22 +173,30 @@ def fetch_news_alternative_sources(ticker: str, page_size=5):
             f"https://newsapi.org/v2/everything?q={term}&sources={indian_sources}&sortBy=publishedAt&pageSize={page_size}&apiKey={NEWS_API_KEY}"
         )
         
-        r = requests.get(url)
-        if r.status_code == 200:
-            articles = r.json().get("articles", [])
-            if articles:
-                break
+        try:
+            r = requests.get(url, timeout=10)
+            if r.status_code == 200:
+                articles = r.json().get("articles", [])
+                if articles:
+                    break
+        except requests.RequestException as e:
+            print(f"Request failed for Indian sources: {e}")
+            continue
         
         # If no results from Indian sources, try general search
         if not articles:
             url = (
                 f"https://newsapi.org/v2/everything?q={term}&sortBy=publishedAt&pageSize={page_size}&language=en&apiKey={NEWS_API_KEY}"
             )
-            r = requests.get(url)
-            if r.status_code == 200:
-                articles = r.json().get("articles", [])
-                if articles:
-                    break
+            try:
+                r = requests.get(url, timeout=10)
+                if r.status_code == 200:
+                    articles = r.json().get("articles", [])
+                    if articles:
+                        break
+            except requests.RequestException as e:
+                print(f"Request failed for general search: {e}")
+                continue
     
     return articles
 
@@ -222,18 +204,34 @@ def analyze_sentiment(texts):
     """Analyze sentiment of text list"""
     if not texts:
         return []
+        
+    if sentiment_model is None or vectorizer is None:
+        print("Warning: Sentiment models not loaded, returning neutral sentiment")
+        return ["neutral"] * len(texts)
     
-    x = vectorizer.transform(texts)
-    preds = sentiment_model.predict(x)
-    return ["negative" if p == 0 else "positive" for p in preds]
+    try:
+        # Clean and prepare texts
+        clean_texts = [str(text).strip() for text in texts if text]
+        if not clean_texts:
+            return []
+            
+        x = vectorizer.transform(clean_texts)
+        preds = sentiment_model.predict(x)
+        return ["negative" if p == 0 else "positive" for p in preds]
+    except Exception as e:
+        print(f"Error in sentiment analysis: {e}")
+        return ["neutral"] * len(texts)
 
 def get_sentiment_for_ticker(ticker: str):
     """Get sentiment analysis for a ticker with improved Indian stock support"""
+    print(f"Fetching sentiment for ticker: {ticker}")
+    
     # Try both approaches
     articles = fetch_news(ticker)
     
     # If no articles found, try alternative approach
     if not articles:
+        print("No articles found with primary method, trying alternative sources...")
         articles = fetch_news_alternative_sources(ticker)
     
     # If still no articles, return empty result
@@ -263,6 +261,7 @@ def get_sentiment_for_ticker(ticker: str):
             "message": "No valid headlines found"
         }
     
+    print(f"Analyzing sentiment for {len(headlines)} headlines...")
     sentiments = analyze_sentiment(headlines)
     
     summary = {
@@ -270,6 +269,8 @@ def get_sentiment_for_ticker(ticker: str):
         "neutral": sentiments.count('neutral'),
         "negative": sentiments.count('negative')
     }
+    
+    print(f"Sentiment summary: {summary}")
     
     return {
         "ticker": ticker.upper(),
@@ -287,7 +288,36 @@ def get_sentiment_for_ticker(ticker: str):
         ]
     }
 
-# Helper function to add new ticker mappings
 def add_ticker_mapping(ticker: str, name: str):
     """Add a new ticker to name mapping"""
     TICKER_MAPPING[ticker] = name
+    print(f"Added mapping: {ticker} -> {name}")
+
+# Test function to verify setup
+def test_sentiment_setup():
+    """Test if sentiment analysis is properly set up"""
+    print("Testing sentiment analysis setup...")
+    
+    # Check if models are loaded
+    if sentiment_model is None or vectorizer is None:
+        print("❌ Sentiment models not loaded")
+        return False
+    
+    # Test with sample text
+    test_texts = ["This is great news!", "Market is falling badly"]
+    try:
+        sentiments = analyze_sentiment(test_texts)
+        print(f"✅ Sentiment analysis working: {sentiments}")
+        return True
+    except Exception as e:
+        print(f"❌ Sentiment analysis failed: {e}")
+        return False
+
+if __name__ == "__main__":
+    # Run tests when script is executed directly
+    test_sentiment_setup()
+    
+    # Test with a sample ticker
+    print("\nTesting with sample ticker...")
+    result = get_sentiment_for_ticker("RELIANCE.NS")
+    print(f"Result: {result}")

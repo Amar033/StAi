@@ -1,0 +1,837 @@
+commit 56397b2455488a17f066c5fe695cb8b87b316bb2
+Author: Amar <amarbavi12345@gmail.com>
+Date:   Fri Jun 20 02:36:06 2025 +0530
+
+    Claude fixed the path issues
+
+diff --git a/backend/routers/compare.py b/backend/routers/compare.py
+index 1b75e54..97de879 100644
+--- a/backend/routers/compare.py
++++ b/backend/routers/compare.py
+@@ -3,39 +3,75 @@ from typing import List
+ from fastapi import APIRouter
+ import pandas as pd
+ import joblib
+-
++import os
+ from utils.sentiment import get_sentiment_for_ticker
+ 
+-compare_router =APIRouter()
++compare_router = APIRouter()
+ 
+ class CompareRequest(BaseModel):
+     tickers: List[str]
+ 
+ @compare_router.post("/compare")
+ def compare_stocks(req: CompareRequest):
+-    results=[]
++    results = []
++    script_dir = os.path.dirname(os.path.abspath(__file__))
++    project_root = os.path.dirname(script_dir)
++    
+     for ticker in req.tickers:
+         try:
+-            df=pd.read_csv(f"../data/processed/{ticker}_processed.csv")
+-            latest_features=df.drop(columns=["Date","Close"]).iloc[-1].values.reshape(1,-1)
+-
+-            model=joblib.load(f"../models/{ticker}_linear.pkl")
+-            scaler_path = f"../models/{ticker}_scaler.pkl"
+-            scaler=joblib.load(scaler_path)
++            # Load processed data
++            data_path = os.path.join(project_root, "data", "processed", f"{ticker}_processed.csv")
++            if not os.path.exists(data_path):
++                results.append({
++                    "ticker": ticker,
++                    "error": f"Processed data not found for {ticker}"
++                })
++                continue
++                
++            df = pd.read_csv(data_path)
++            latest_features = df.drop(columns=["Date", "Close"]).iloc[-1].values.reshape(1, -1)
++            
++            # Load model
++            model_path = os.path.join(project_root, "models", f"{ticker}_linear.pkl")
++            if not os.path.exists(model_path):
++                results.append({
++                    "ticker": ticker,
++                    "error": f"Model not found for {ticker}"
++                })
++                continue
++                
++            model = joblib.load(model_path)
++            
++            # Load scaler
++            scaler_path = os.path.join(project_root, "models", f"{ticker}_scaler.pkl")
++            if not os.path.exists(scaler_path):
++                results.append({
++                    "ticker": ticker,
++                    "error": f"Scaler not found for {ticker}"
++                })
++                continue
++                
++            scaler = joblib.load(scaler_path)
+             features_scaled = scaler.transform(latest_features)
+-
+-            prediction = float(model.predict(features_scaled))
+-            latest_price = df["Close"].iloc[-1]
++            
++            # Make prediction
++            prediction = float(model.predict(features_scaled)[0])
++            latest_price = float(df["Close"].iloc[-1])
++            
++            # Get sentiment
+             sentiment = get_sentiment_for_ticker(ticker)
++            
+             results.append({
+                 "ticker": ticker,
+-                "latest_price": round(float(latest_price), 2),
+-                "predicted_price": round(float(prediction), 2),
++                "latest_price": round(latest_price, 2),
++                "predicted_price": round(prediction, 2),
+                 "sentiment": sentiment
+             })
++            
+         except Exception as e:
+             results.append({
+-                "ticker":ticker,
+-                "error":str(e)
++                "ticker": ticker,
++                "error": str(e)
+             })
+-    return results
+\ No newline at end of file
++    
++    return results
+diff --git a/backend/routers/insights.py b/backend/routers/insights.py
+index 355d927..2f21370 100644
+--- a/backend/routers/insights.py
++++ b/backend/routers/insights.py
+@@ -12,27 +12,32 @@ def get_insights():
+     bullish = []
+     potential_buys = []
+     underperforming = []
+-
++    
+     for ticker in TICKER_LIST:
+         try:
+             from routers.predict import predict_stock_price
+             data = predict_stock_price(ticker)
+-
++            
+             trend = data.get("trend", "")
+             confidence_str = data.get("confidence", "0%").replace('%', '')
+-            confidence = int(confidence_str)
+-
++            
++            try:
++                confidence = int(confidence_str)
++            except ValueError:
++                confidence = 0
++            
+             if trend == "Bullish":
+                 bullish.append(ticker)
+                 if confidence >= 80:
+                     potential_buys.append(ticker)
+             elif trend == "Bearish":
+                 underperforming.append(ticker)
++                
+         except Exception as e:
+             logger.warning(f"Skipping {ticker}: {e}")
+-
++    
+     return {
+         "top_bullish": bullish,
+         "potential_buys": potential_buys,
+         "underperforming": underperforming
+-    }
++    }
+\ No newline at end of file
+diff --git a/backend/routers/predict.py b/backend/routers/predict.py
+index a75ce29..46e9085 100644
+--- a/backend/routers/predict.py
++++ b/backend/routers/predict.py
+@@ -1,3 +1,4 @@
++# SOLUTION 1: Updated predict.py with better path handling for deployment
+ from fastapi import APIRouter, HTTPException
+ from pydantic import BaseModel
+ import joblib
+@@ -7,6 +8,8 @@ import pandas as pd
+ from datetime import datetime, timedelta
+ import warnings
+ import logging
++import os
++from pathlib import Path
+ 
+ # Configure logging
+ logging.basicConfig(level=logging.INFO)
+@@ -18,6 +21,96 @@ class PredictRequest(BaseModel):
+     ticker: str
+     features: list
+ 
++def get_model_paths(ticker: str):
++    """Get model and scaler paths - works for both local and deployed environments"""
++    
++    # Get the absolute path of the current file
++    current_file_path = Path(__file__).resolve()
++    current_dir = current_file_path.parent
++    
++    # Try different possible locations for models
++    possible_model_dirs = [
++        # Same directory as this script
++        current_dir / "models",
++        # Parent directory models folder  
++        current_dir.parent / "models",
++        # Root project models folder (for deployed apps)
++        Path.cwd() / "models",
++        # Check if we're in a subfolder (like app/routers/)
++        current_dir.parent.parent / "models",
++    ]
++    
++    model_filename = f"{ticker}_xg.pkl"
++    scaler_filename = f"{ticker}_scaler.pkl"
++    
++    # Log the search paths for debugging
++    logger.info(f"Searching for models for {ticker}")
++    logger.info(f"Current file: {current_file_path}")
++    logger.info(f"Current working directory: {Path.cwd()}")
++    
++    for models_dir in possible_model_dirs:
++        model_path = models_dir / model_filename
++        scaler_path = models_dir / scaler_filename
++        
++        logger.info(f"Checking: {models_dir}")
++        logger.info(f"  Model exists: {model_path.exists()}")
++        logger.info(f"  Scaler exists: {scaler_path.exists()}")
++        
++        if model_path.exists() and scaler_path.exists():
++            logger.info(f"✅ Found models in: {models_dir}")
++            return str(model_path), str(scaler_path)
++    
++    # If not found, return the first option for error reporting
++    first_option = possible_model_dirs[0]
++    return str(first_option / model_filename), str(first_option / scaler_filename)
++
++def list_directory_contents():
++    """Debug function to list directory contents"""
++    current_dir = Path(__file__).resolve().parent
++    root_dir = Path.cwd()
++    
++    logger.info("=== DIRECTORY STRUCTURE DEBUG ===")
++    logger.info(f"Script location: {current_dir}")
++    logger.info(f"Working directory: {root_dir}")
++    
++    # List current directory contents
++    logger.info(f"\n📁 Contents of {current_dir}:")
++    try:
++        for item in current_dir.iterdir():
++            logger.info(f"  {item.name} ({'dir' if item.is_dir() else 'file'})")
++    except Exception as e:
++        logger.error(f"Could not list {current_dir}: {e}")
++    
++    # List working directory contents  
++    logger.info(f"\n📁 Contents of {root_dir}:")
++    try:
++        for item in root_dir.iterdir():
++            logger.info(f"  {item.name} ({'dir' if item.is_dir() else 'file'})")
++    except Exception as e:
++        logger.error(f"Could not list {root_dir}: {e}")
++    
++    # Check for models directory
++    models_dirs = [
++        current_dir / "models",
++        current_dir.parent / "models", 
++        root_dir / "models",
++        current_dir.parent.parent / "models"
++    ]
++    
++    for models_dir in models_dirs:
++        logger.info(f"\n📁 Checking models directory: {models_dir}")
++        logger.info(f"  Exists: {models_dir.exists()}")
++        if models_dir.exists():
++            try:
++                contents = list(models_dir.iterdir())
++                logger.info(f"  Contents ({len(contents)} items):")
++                for item in contents[:10]:  # Show first 10 items
++                    logger.info(f"    {item.name}")
++                if len(contents) > 10:
++                    logger.info(f"    ... and {len(contents) - 10} more")
++            except Exception as e:
++                logger.error(f"  Could not list contents: {e}")
++
+ def get_stock_features(ticker: str):
+     try:
+         stock = yf.Ticker(ticker)
+@@ -53,14 +146,14 @@ def get_stock_features(ticker: str):
+             volatility = 0.02
+         
+         features = [
+-            float(open_price),  # Open - first in training order
+-            float(high),        # High - second in training order
+-            float(low),         # Low - third in training order
+-            float(volume),      # Volume - fourth in training order
+-            float(ma10),        # MA10 - fifth in training order
+-            float(ma50),        # MA50 - sixth in training order
+-            float(returns),     # Returns - seventh in training order
+-            float(volatility)   # Volatility - eighth in training order
++            float(open_price),  # Open
++            float(high),        # High
++            float(low),         # Low
++            float(volume),      # Volume
++            float(ma10),        # MA10
++            float(ma50),        # MA50
++            float(returns),     # Returns
++            float(volatility)   # Volatility
+         ]
+         
+         return features, hist
+@@ -104,12 +197,102 @@ def get_stock_basic_info(ticker: str):
+             "current_close": 0
+         }
+ 
++def load_model_and_scaler(symbol: str):
++    """Load model and scaler with enhanced error handling for deployment"""
++    
++    # First, debug directory structure (only in development)
++    if os.getenv("ENVIRONMENT") != "production":
++        list_directory_contents()
++    
++    model_path, scaler_path = get_model_paths(symbol)
++    
++    logger.info(f"Final paths selected:")
++    logger.info(f"  Model: {model_path}")
++    logger.info(f"  Scaler: {scaler_path}")
++    
++    # Check if files exist
++    if not os.path.exists(model_path):
++        raise FileNotFoundError(f"Model file not found: {model_path}")
++    if not os.path.exists(scaler_path):
++        raise FileNotFoundError(f"Scaler file not found: {scaler_path}")
++    
++    # Load with warnings suppressed
++    with warnings.catch_warnings():
++        warnings.filterwarnings("ignore", category=UserWarning)
++        warnings.filterwarnings("ignore", message=".*InconsistentVersionWarning.*")
++        
++        try:
++            model = joblib.load(model_path)
++            scaler = joblib.load(scaler_path)
++            logger.info(f"✅ Successfully loaded model and scaler for {symbol}")
++            return model, scaler
++        except Exception as e:
++            logger.error(f"Error loading model files: {str(e)}")
++            raise ValueError(f"Error loading model files: {str(e)}")
++
++# Add a debug endpoint to check file system
++@router.get("/debug/files")
++def debug_file_system():
++    """Debug endpoint to check file system structure"""
++    list_directory_contents()
++    
++    current_dir = Path(__file__).resolve().parent
++    working_dir = Path.cwd()
++    
++    return {
++        "script_location": str(current_dir),
++        "working_directory": str(working_dir),
++        "environment_vars": {
++            "PWD": os.getenv("PWD", "Not set"),
++            "PYTHONPATH": os.getenv("PYTHONPATH", "Not set"),
++        }
++    }
++
++@router.get("/debug/model-check/{symbol}")
++def debug_model_check(symbol: str):
++    """Check if model files exist for a specific symbol"""
++    symbol = symbol.upper()
++    model_path, scaler_path = get_model_paths(symbol)
++    
++    current_dir = Path(__file__).resolve().parent
++    possible_dirs = [
++        current_dir / "models",
++        current_dir.parent / "models",
++        Path.cwd() / "models",
++        current_dir.parent.parent / "models"
++    ]
++    
++    dir_info = []
++    for dir_path in possible_dirs:
++        model_file = dir_path / f"{symbol}_xg.pkl"
++        scaler_file = dir_path / f"{symbol}_scaler.pkl"
++        
++        contents = []
++        if dir_path.exists():
++            try:
++                contents = [f.name for f in dir_path.iterdir() if f.is_file()][:20]
++            except:
++                contents = ["Could not read directory"]
++        
++        dir_info.append({
++            "directory": str(dir_path),
++            "exists": dir_path.exists(),
++            "model_exists": model_file.exists(),
++            "scaler_exists": scaler_file.exists(),
++            "contents_sample": contents
++        })
++    
++    return {
++        "symbol": symbol,
++        "selected_model_path": model_path,
++        "selected_scaler_path": scaler_path,
++        "directories_checked": dir_info
++    }
++
++# Rest of your endpoints remain the same...
+ @router.get("/predict/{symbol}")
+ def predict_stock_price(symbol: str):
+-    """
+-    Predict next Close price for a given symbol using:
+-    High, Low, Open, Volume, MA10, MA50, Returns, Volatility
+-    """
++    """Predict next Close price for a given symbol"""
+     try:
+         symbol = symbol.upper()
+         logger.info(f"Processing prediction request for {symbol}")
+@@ -119,24 +302,12 @@ def predict_stock_price(symbol: str):
+         basic_info = get_stock_basic_info(symbol)
+         
+         # Load model and scaler
+-        model_path = f"..\\models\\{symbol}_xg.pkl"
+-        scaler_path = f"..\\models\\{symbol}_scaler.pkl"
+-        
+-        logger.info(f"Loading model from: {model_path}")
+-        logger.info(f"Loading scaler from: {scaler_path}")
+-        
+-        # Suppress sklearn warnings temporarily
+-        with warnings.catch_warnings():
+-            warnings.filterwarnings("ignore", category=UserWarning)
+-            warnings.filterwarnings("ignore", message=".*InconsistentVersionWarning.*")
+-            
+-            model = joblib.load(model_path)
+-            scaler = joblib.load(scaler_path)
++        model, scaler = load_model_and_scaler(symbol)
+         
+         # Define feature names matching EXACT order from training
+         feature_names = ['Open', 'High', 'Low', 'Volume', 'MA10', 'MA50', 'Returns', 'Volatility']
+         
+-        # Create DataFrame with proper feature names to avoid sklearn warning
++        # Create DataFrame with proper feature names
+         features_df = pd.DataFrame([features], columns=feature_names)
+         
+         # Scale features
+@@ -153,11 +324,11 @@ def predict_stock_price(symbol: str):
+             prediction_diff = abs(predicted_close[0] - current_close) / current_close
+             confidence = max(60, min(95, 90 - (prediction_diff * 100)))
+         else:
+-            confidence = 75  # Default confidence if current_close is invalid
++            confidence = 75
+             
+-        if predicted_close[0] > current_close * 1.02:  # >2% increase
++        if predicted_close[0] > current_close * 1.02:
+             trend = "Bullish"
+-        elif predicted_close[0] < current_close * 0.98:  # >2% decrease
++        elif predicted_close[0] < current_close * 0.98:
+             trend = "Bearish"
+         else:
+             trend = "Neutral"
+@@ -171,7 +342,7 @@ def predict_stock_price(symbol: str):
+         else:
+             sentiment_score = "Neutral"
+         
+-        logger.info(f"Prediction successful for {symbol}: {predicted_close[0]:.2f}")
++        logger.info(f"✅ Prediction successful for {symbol}: {predicted_close[0]:.2f}")
+         
+         return {
+             "symbol": basic_info["symbol"],
+@@ -185,23 +356,32 @@ def predict_stock_price(symbol: str):
+             "sentimentScore": sentiment_score,
+             "success": True,
+             "features_used": {
+-                "open": features[0],    # Open
+-                "high": features[1],    # High  
+-                "low": features[2],     # Low
+-                "volume": features[3],  # Volume
+-                "ma10": features[4],    # MA10
+-                "ma50": features[5],    # MA50
+-                "returns": features[6], # Returns
+-                "volatility": features[7] # Volatility
++                "open": features[0],
++                "high": features[1],
++                "low": features[2],
++                "volume": features[3],
++                "ma10": features[4],
++                "ma50": features[5],
++                "returns": features[6],
++                "volatility": features[7]
+             }
+         }
+         
+     except FileNotFoundError as e:
+-        logger.error(f"Model files not found for {symbol}: {str(e)}")
+-        raise HTTPException(
+-            status_code=404, 
+-            detail=f"Model or scaler for {symbol} not found. Make sure both {symbol}_xg.pkl and {symbol}_scaler.pkl exist in the models directory."
++        logger.error(f"❌ Model files not found for {symbol}: {str(e)}")
++        
++        # Provide detailed error with debugging info
++        model_path, scaler_path = get_model_paths(symbol)
++        current_dir = Path(__file__).resolve().parent
++        
++        error_detail = (
++            f"Model files for {symbol} not found. "
++            f"Searched paths include: {Path(model_path).parent}. "
++            f"Available models can be checked via /debug/model-check/{symbol}. "
++            f"Script location: {current_dir}"
+         )
++        
++        raise HTTPException(status_code=404, detail=error_detail)
+     except ValueError as e:
+         logger.error(f"ValueError for {symbol}: {str(e)}")
+         raise HTTPException(status_code=400, detail=str(e))
+@@ -209,84 +389,4 @@ def predict_stock_price(symbol: str):
+         logger.error(f"Unexpected error for {symbol}: {str(e)}")
+         raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
+ 
+-@router.post("/predict")
+-def predict_price_with_features(data: PredictRequest):
+-    """
+-    Original endpoint for manual feature input
+-    Expects features in order: [High, Low, Open, Volume, MA10, MA50, Returns, Volatility]
+-    """
+-    try:
+-        if len(data.features) != 8:
+-            raise HTTPException(
+-                status_code=400, 
+-                detail="Expected 8 features: [High, Low, Open, Volume, MA10, MA50, Returns, Volatility]"
+-            )
+-        
+-        model_path = f"..\\models\\{data.ticker}_xg.pkl"
+-        scaler_path = f"..\\models\\{data.ticker}_scaler.pkl"
+-        
+-        # Suppress sklearn warnings
+-        with warnings.catch_warnings():
+-            warnings.filterwarnings("ignore", category=UserWarning)
+-            warnings.filterwarnings("ignore", message=".*InconsistentVersionWarning.*")
+-            
+-            model = joblib.load(model_path)
+-            scaler = joblib.load(scaler_path)
+-        
+-        # Create DataFrame with proper feature names matching training data
+-        feature_names = ['Open', 'High', 'Low', 'Volume', 'MA10', 'MA50', 'Returns', 'Volatility']
+-        features_df = pd.DataFrame([data.features], columns=feature_names)
+-        
+-        # Scale and predict
+-        with warnings.catch_warnings():
+-            warnings.filterwarnings("ignore", category=UserWarning)
+-            features_scaled = scaler.transform(features_df)
+-            
+-        prediction = model.predict(features_scaled)
+-        
+-        return {
+-            "ticker": data.ticker, 
+-            "predicted_close": float(prediction[0]),
+-            "features_used": {
+-                "open": data.features[0],    # Open
+-                "high": data.features[1],    # High
+-                "low": data.features[2],     # Low
+-                "volume": data.features[3],  # Volume
+-                "ma10": data.features[4],    # MA10
+-                "ma50": data.features[5],    # MA50
+-                "returns": data.features[6], # Returns
+-                "volatility": data.features[7] # Volatility
+-            }
+-        }
+-        
+-    except FileNotFoundError as e:
+-        logger.error(f"Model files not found for {data.ticker}: {str(e)}")
+-        raise HTTPException(
+-            status_code=404,
+-            detail=f"Model or scaler for {data.ticker} not found. Make sure both {data.ticker}_xg.pkl and {data.ticker}_scaler.pkl exist in the models directory."
+-        )
+-    except Exception as e:
+-        logger.error(f"Prediction error for {data.ticker}: {str(e)}")
+-        raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
+-
+-@router.get("/price-history/{symbol}")
+-def get_price_history(symbol: str, range: int = 60):
+-    try:
+-        stock = yf.Ticker(symbol)
+-        hist = stock.history(period=f"{range}d")
+-        if hist.empty:
+-            raise HTTPException(status_code=404, detail="No historical data found.")
+-
+-        price_data = [
+-            {
+-                "date": date.strftime("%Y-%m-%d"),
+-                "price": round(row["Close"], 2)
+-            }
+-            for date, row in hist.iterrows()
+-        ]
+-
+-        return {"symbol": symbol.upper(), "history": price_data}
+-
+-    except Exception as e:
+-        logger.error(f"Error fetching price history for {symbol}: {str(e)}")
+-        raise HTTPException(status_code=500, detail="Error fetching historical data.")
++# Include your other endpoints (POST /predict, price-history, etc.) here...
+\ No newline at end of file
+diff --git a/backend/utils/features.py b/backend/utils/features.py
+index 7d1aa50..8daccba 100644
+--- a/backend/utils/features.py
++++ b/backend/utils/features.py
+@@ -2,10 +2,18 @@ import pandas as pd
+ import os
+ 
+ def get_features_for_ticker(ticker: str):
+-    path=f"../data/processed/{ticker}_processed.csv"
++    """Get feature columns for a ticker"""
++    script_dir = os.path.dirname(os.path.abspath(__file__))
++    project_root = os.path.dirname(script_dir)
++    path = os.path.join(project_root, "data", "processed", f"{ticker}_processed.csv")
++    
+     if not os.path.exists(path):
+         return None
+-    df=pd.read_csv(path)
+-    excluded_cols=["Date","Close","Target"]
+-    feature_cols=[col for col in df.columns if col not in excluded_cols]
+-    return feature_cols
+\ No newline at end of file
++        
++    try:
++        df = pd.read_csv(path)
++        excluded_cols = ["Date", "Close", "Target"]
++        feature_cols = [col for col in df.columns if col not in excluded_cols]
++        return feature_cols
++    except Exception:
++        return None
+diff --git a/backend/utils/sentiment.py b/backend/utils/sentiment.py
+index 46cabfb..c7a62dd 100644
+--- a/backend/utils/sentiment.py
++++ b/backend/utils/sentiment.py
+@@ -1,54 +1,3 @@
+-# import requests
+-# import random
+-# import os
+-# from dotenv import load_dotenv
+-# import joblib
+-
+-# load_dotenv()
+-
+-# NEWS_API_KEY=os.getenv('NEWS_API_KEY')
+-# script_dir = os.path.dirname(os.path.abspath(__file__))
+-# sentiment_model = joblib.load(os.path.join(script_dir, "model", "logistic_model.pkl"))
+-# vectorizer = joblib.load(os.path.join(script_dir, "model", "tfidf_vectorizer.pkl"))
+-
+-
+-# def fetch_news(ticker:str , page_size=5):
+-#     url=(
+-#         f"https://newsapi.org/v2/everything?q={ticker}&sortBy=publishedAt&pageSize={page_size}&language=en&apiKey={NEWS_API_KEY}"
+-#     )
+-#     r= requests.get(url)
+-#     if r.status_code != 200:
+-#         return []
+-#     return r.json().get("articles",[])
+-
+-# def analyze_sentiment(texts):
+-#     x=vectorizer.transform(texts)
+-#     preds=sentiment_model.predict(x)
+-#     return ["negative" if p==0 else "positive" for p in preds]
+-
+-# def get_sentiment_for_ticker(ticker:str):
+-#     articles=fetch_news(ticker)
+-#     headlines=[a['title'] for a in articles]
+-#     sentiments=analyze_sentiment(headlines)
+-#     summary={
+-#         "positive":sentiments.count('positive'),
+-#         "neutral":sentiments.count('neutral'),
+-#         "negative":sentiments.count('negative')
+-#     }
+-#     return {
+-#         "ticker":ticker.upper(),
+-#         "summary":summary,
+-#         "articles":[
+-#             {
+-#                 "title":a["title"],
+-#                 "url":a.get("url"),
+-#                 "source":a["source"]["name"],
+-#                 "sentiment":s
+-#             }
+-#             for a,s in zip(articles,sentiments)
+-#         ]
+-#     }
+-
+ import requests
+ import random
+ import os
+@@ -59,8 +8,19 @@ load_dotenv()
+ 
+ NEWS_API_KEY = os.getenv('NEWS_API_KEY')
+ script_dir = os.path.dirname(os.path.abspath(__file__))
+-sentiment_model = joblib.load(os.path.join(script_dir, "model", "logistic_model.pkl"))
+-vectorizer = joblib.load(os.path.join(script_dir, "model", "tfidf_vectorizer.pkl"))
++project_root = os.path.dirname(script_dir)
++
++# Load sentiment models with correct paths
++sentiment_model_path = os.path.join(project_root, "models", "logistic_model.pkl")
++vectorizer_path = os.path.join(project_root, "models", "tfidf_vectorizer.pkl")
++
++try:
++    sentiment_model = joblib.load(sentiment_model_path)
++    vectorizer = joblib.load(vectorizer_path)
++except FileNotFoundError as e:
++    print(f"Warning: Could not load sentiment models - {e}")
++    sentiment_model = None
++    vectorizer = None
+ 
+ # Stock ticker to company/index name mapping
+ TICKER_MAPPING = {
+@@ -99,25 +59,19 @@ TICKER_MAPPING = {
+     "^GDAXI": "DAX",
+     "^N225": "Nikkei 225",
+     
+-    # Crypto (some platforms use different prefixes)
++    # Crypto
+     "BTC-USD": "Bitcoin",
+     "ETH-USD": "Ethereum",
+-    
+-    # Add more mappings as needed
+ }
+ 
+ def get_search_terms(ticker: str):
+     """Generate search terms for better news retrieval"""
+-    # Clean ticker for search
+     clean_ticker = ticker.replace('.NS', '').replace('.BO', '').replace('^', '')
+     
+-    # Check if it's a known ticker/index
+     if ticker in TICKER_MAPPING:
+         name = TICKER_MAPPING[ticker]
+         
+-        # Different search strategies for indices vs stocks
+         if ticker.startswith('^'):
+-            # For market indices
+             return [
+                 f'"{name}" index',
+                 f'{name} market',
+@@ -125,7 +79,6 @@ def get_search_terms(ticker: str):
+                 name
+             ]
+         elif ticker.endswith('.NS') or ticker.endswith('.BO'):
+-            # For Indian stocks
+             return [
+                 f'"{name}" stock',
+                 f'"{name}" India',
+@@ -133,7 +86,6 @@ def get_search_terms(ticker: str):
+                 clean_ticker
+             ]
+         else:
+-            # For other stocks/assets
+             return [
+                 f'"{name}" stock',
+                 f'{name} shares',
+@@ -141,7 +93,6 @@ def get_search_terms(ticker: str):
+                 clean_ticker
+             ]
+     
+-    # For unknown tickers, use generic search terms
+     if ticker.startswith('^'):
+         return [
+             f'{clean_ticker} index',
+@@ -158,21 +109,26 @@ def get_search_terms(ticker: str):
+ 
+ def fetch_news(ticker: str, page_size=10):
+     """Fetch news with improved search strategy"""
++    if not NEWS_API_KEY:
++        return []
++        
+     search_terms = get_search_terms(ticker)
+     all_articles = []
+     
+-    # Try different search terms
+     for term in search_terms:
+         url = (
+             f"https://newsapi.org/v2/everything?q={term}&sortBy=publishedAt&pageSize={page_size}&language=en&apiKey={NEWS_API_KEY}"
+         )
+         
+-        r = requests.get(url)
+-        if r.status_code == 200:
+-            articles = r.json().get("articles", [])
+-            if articles:
+-                all_articles.extend(articles)
+-                break  # Stop if we found articles with this search term
++        try:
++            r = requests.get(url)
++            if r.status_code == 200:
++                articles = r.json().get("articles", [])
++                if articles:
++                    all_articles.extend(articles)
++                    break
++        except requests.RequestException:
++            continue
+     
+     # Remove duplicates based on title
+     seen_titles = set()
+@@ -199,33 +155,42 @@ def fetch_news_alternative_sources(ticker: str, page_size=5):
+             f"https://newsapi.org/v2/everything?q={term}&sources={indian_sources}&sortBy=publishedAt&pageSize={page_size}&apiKey={NEWS_API_KEY}"
+         )
+         
+-        r = requests.get(url)
+-        if r.status_code == 200:
+-            articles = r.json().get("articles", [])
+-            if articles:
+-                break
++        try:
++            r = requests.get(url)
++            if r.status_code == 200:
++                articles = r.json().get("articles", [])
++                if articles:
++                    break
++        except requests.RequestException:
++            continue
+         
+         # If no results from Indian sources, try general search
+         if not articles:
+             url = (
+                 f"https://newsapi.org/v2/everything?q={term}&sortBy=publishedAt&pageSize={page_size}&language=en&apiKey={NEWS_API_KEY}"
+             )
+-            r = requests.get(url)
+-            if r.status_code == 200:
+-                articles = r.json().get("articles", [])
+-                if articles:
+-                    break
++            try:
++                r = requests.get(url)
++                if r.status_code == 200:
++                    articles = r.json().get("articles", [])
++                    if articles:
++                        break
++            except requests.RequestException:
++                continue
+     
+     return articles
+ 
+ def analyze_sentiment(texts):
+     """Analyze sentiment of text list"""
+-    if not texts:
++    if not texts or sentiment_model is None or vectorizer is None:
+         return []
+     
+-    x = vectorizer.transform(texts)
+-    preds = sentiment_model.predict(x)
+-    return ["negative" if p == 0 else "positive" for p in preds]
++    try:
++        x = vectorizer.transform(texts)
++        preds = sentiment_model.predict(x)
++        return ["negative" if p == 0 else "positive" for p in preds]
++    except Exception:
++        return ["neutral"] * len(texts)
+ 
+ def get_sentiment_for_ticker(ticker: str):
+     """Get sentiment analysis for a ticker with improved Indian stock support"""
+@@ -287,7 +252,6 @@ def get_sentiment_for_ticker(ticker: str):
+         ]
+     }
+ 
+-# Helper function to add new ticker mappings
+ def add_ticker_mapping(ticker: str, name: str):
+     """Add a new ticker to name mapping"""
+     TICKER_MAPPING[ticker] = name
+\ No newline at end of file
