@@ -21,39 +21,80 @@ class PredictRequest(BaseModel):
     features: list
 
 def get_project_root():
-    """Get the project root directory (where main.py is located)"""
+    """Get the project root directory - handles both local and Railway deployment"""
     current_file = Path(__file__).resolve()
     
-    # From backend/routers/predict.py, go up 2 levels to reach project root
-    # backend/routers/predict.py -> backend/routers -> backend -> project_root
-    project_root = current_file.parent.parent.parent
+    # Check if we're in Railway deployment (frontend is root)
+    # In Railway: frontend/backend/routers/predict.py
+    # In Local: backend/routers/predict.py
+    
+    # From backend/routers/predict.py, go up levels to find project root
+    potential_roots = [
+        current_file.parent.parent.parent,  # For Railway: frontend/backend/routers -> frontend/backend -> frontend
+        current_file.parent.parent,         # For Local: backend/routers -> backend -> project_root
+    ]
     
     logger.info(f"Current file: {current_file}")
-    logger.info(f"Calculated project root: {project_root}")
     
-    return project_root
+    # Try to find the correct root by looking for models directory
+    for root in potential_roots:
+        models_dir = root / "models"
+        if models_dir.exists():
+            logger.info(f"Found models directory at: {models_dir}")
+            logger.info(f"Using project root: {root}")
+            return root
+    
+    # If no models directory found, check parent directories more systematically
+    current = current_file.parent
+    for _ in range(5):  # Check up to 5 levels up
+        models_dir = current / "models"
+        if models_dir.exists():
+            logger.info(f"Found models directory at: {models_dir}")
+            logger.info(f"Using project root: {current}")
+            return current
+        current = current.parent
+    
+    # Fallback to Railway structure assumption
+    railway_root = current_file.parent.parent.parent
+    logger.warning(f"Models directory not found, using Railway root assumption: {railway_root}")
+    return railway_root
 
 def get_model_paths(ticker: str):
-    """Get model and scaler paths for prediction models (in root/models folder)"""
+    """Get model and scaler paths for prediction models"""
     
     project_root = get_project_root()
     
-    # Prediction models are in the root /models directory
-    models_dir = project_root / "models"
+    # Try multiple possible locations for models
+    possible_model_dirs = [
+        project_root / "models",           # Standard location
+        project_root / "backend" / "models",  # Alternative location
+        project_root.parent / "models",    # Parent directory (for Railway)
+    ]
     
     model_filename = f"{ticker}_xg.pkl"
     scaler_filename = f"{ticker}_scaler.pkl"
     
+    for models_dir in possible_model_dirs:
+        model_path = models_dir / model_filename
+        scaler_path = models_dir / scaler_filename
+        
+        logger.info(f"Checking models directory: {models_dir}")
+        logger.info(f"Directory exists: {models_dir.exists()}")
+        
+        if models_dir.exists():
+            logger.info(f"Model file exists: {model_path.exists()}")
+            logger.info(f"Scaler file exists: {scaler_path.exists()}")
+            
+            if model_path.exists() and scaler_path.exists():
+                logger.info(f"✅ Found model files in: {models_dir}")
+                return str(model_path), str(scaler_path)
+    
+    # If not found, return the first option for error reporting
+    models_dir = possible_model_dirs[0]
     model_path = models_dir / model_filename
     scaler_path = models_dir / scaler_filename
     
-    logger.info(f"Looking for prediction models in: {models_dir}")
-    logger.info(f"Model file: {model_path}")
-    logger.info(f"Scaler file: {scaler_path}")
-    logger.info(f"Models dir exists: {models_dir.exists()}")
-    logger.info(f"Model exists: {model_path.exists()}")
-    logger.info(f"Scaler exists: {scaler_path.exists()}")
-    
+    logger.error(f"❌ Model files not found in any location")
     return str(model_path), str(scaler_path)
 
 def get_sentiment_model_paths():
@@ -61,20 +102,26 @@ def get_sentiment_model_paths():
     
     current_file = Path(__file__).resolve()
     
-    # From backend/routers/predict.py -> backend/routers -> backend -> backend/utils/models
-    sentiment_models_dir = current_file.parent.parent / "utils" / "models"
+    # Try multiple possible locations for sentiment models
+    possible_sentiment_dirs = [
+        current_file.parent.parent / "utils" / "models",  # Standard: backend/utils/models
+        current_file.parent.parent.parent / "backend" / "utils" / "models",  # Railway: frontend/backend/utils/models
+    ]
     
-    logger.info(f"Looking for sentiment models in: {sentiment_models_dir}")
-    logger.info(f"Sentiment models dir exists: {sentiment_models_dir.exists()}")
+    for sentiment_dir in possible_sentiment_dirs:
+        logger.info(f"Checking sentiment models directory: {sentiment_dir}")
+        logger.info(f"Directory exists: {sentiment_dir.exists()}")
+        
+        if sentiment_dir.exists():
+            try:
+                contents = list(sentiment_dir.iterdir())
+                logger.info(f"Sentiment models directory contents: {[f.name for f in contents]}")
+                return sentiment_dir
+            except Exception as e:
+                logger.error(f"Could not list sentiment models directory: {e}")
     
-    if sentiment_models_dir.exists():
-        try:
-            contents = list(sentiment_models_dir.iterdir())
-            logger.info(f"Sentiment models directory contents: {[f.name for f in contents]}")
-        except Exception as e:
-            logger.error(f"Could not list sentiment models directory: {e}")
-    
-    return sentiment_models_dir
+    # Return the first option as fallback
+    return possible_sentiment_dirs[0]
 
 def debug_directory_structure():
     """Debug function to show the complete directory structure"""
@@ -82,9 +129,23 @@ def debug_directory_structure():
     current_file = Path(__file__).resolve()
     project_root = get_project_root()
     
-    logger.info("=== COMPLETE DIRECTORY STRUCTURE DEBUG ===")
+    logger.info("=== COMPLETE DIRECTORY STRUCTURE DEBUG (RAILWAY COMPATIBLE) ===")
     logger.info(f"Current file: {current_file}")
     logger.info(f"Project root: {project_root}")
+    logger.info(f"Working directory: {Path.cwd()}")
+    
+    # Check current file's parent directories
+    logger.info(f"\n📁 Current file parent structure:")
+    current = current_file.parent
+    for i in range(5):
+        logger.info(f"  Level {i}: {current}")
+        if current.exists():
+            try:
+                contents = [item.name for item in current.iterdir() if item.is_dir()][:5]
+                logger.info(f"    Directories: {contents}")
+            except:
+                pass
+        current = current.parent
     
     # Check project root contents
     logger.info(f"\n📁 Project root contents ({project_root}):")
@@ -96,45 +157,32 @@ def debug_directory_structure():
         except Exception as e:
             logger.error(f"Could not list project root: {e}")
     
-    # Check root models directory
-    root_models = project_root / "models"
-    logger.info(f"\n📁 Root models directory ({root_models}):")
-    logger.info(f"  Exists: {root_models.exists()}")
-    if root_models.exists():
-        try:
-            model_files = [f for f in root_models.iterdir() if f.suffix == '.pkl']
-            logger.info(f"  Found {len(model_files)} .pkl files:")
-            for model_file in model_files[:10]:  # Show first 10
-                logger.info(f"    📄 {model_file.name}")
-            if len(model_files) > 10:
-                logger.info(f"    ... and {len(model_files) - 10} more .pkl files")
-        except Exception as e:
-            logger.error(f"Could not list models directory: {e}")
+    # Check for models in multiple locations
+    possible_model_locations = [
+        project_root / "models",
+        project_root / "backend" / "models", 
+        project_root.parent / "models",
+        project_root / ".." / "models",
+    ]
     
-    # Check backend directory
-    backend_dir = current_file.parent.parent  # backend/routers -> backend
-    logger.info(f"\n📁 Backend directory ({backend_dir}):")
-    if backend_dir.exists():
+    logger.info(f"\n🔍 Checking possible model locations:")
+    for location in possible_model_locations:
         try:
-            for item in backend_dir.iterdir():
-                item_type = "📁 dir" if item.is_dir() else "📄 file"
-                logger.info(f"  {item_type}: {item.name}")
+            resolved_location = location.resolve()
+            exists = resolved_location.exists()
+            logger.info(f"  📁 {resolved_location}: {'✅ EXISTS' if exists else '❌ NOT FOUND'}")
+            
+            if exists:
+                pkl_files = [f for f in resolved_location.iterdir() if f.suffix == '.pkl']
+                logger.info(f"    Found {len(pkl_files)} .pkl files")
+                if pkl_files:
+                    # Show first few files
+                    for f in pkl_files[:3]:
+                        logger.info(f"      📄 {f.name}")
+                    if len(pkl_files) > 3:
+                        logger.info(f"      ... and {len(pkl_files) - 3} more")
         except Exception as e:
-            logger.error(f"Could not list backend directory: {e}")
-    
-    # Check utils models directory
-    utils_models = backend_dir / "utils" / "models"
-    logger.info(f"\n📁 Utils models directory ({utils_models}):")
-    logger.info(f"  Exists: {utils_models.exists()}")
-    if utils_models.exists():
-        try:
-            sentiment_files = list(utils_models.iterdir())
-            logger.info(f"  Found {len(sentiment_files)} files:")
-            for file in sentiment_files:
-                file_type = "📁 dir" if file.is_dir() else "📄 file"
-                logger.info(f"    {file_type}: {file.name}")
-        except Exception as e:
-            logger.error(f"Could not list utils models directory: {e}")
+            logger.error(f"  Error checking {location}: {e}")
 
 def get_stock_features(ticker: str):
     try:
@@ -223,7 +271,7 @@ def get_stock_basic_info(ticker: str):
         }
 
 def load_model_and_scaler(symbol: str):
-    """Load prediction model and scaler from root/models directory"""
+    """Load prediction model and scaler - Railway deployment compatible"""
     
     # Debug directory structure in development
     if os.getenv("ENVIRONMENT") != "production":
@@ -268,11 +316,12 @@ def debug_structure():
         "current_file": str(current_file),
         "project_root": str(project_root),
         "models_directory": str(project_root / "models"),
-        "sentiment_models_directory": str(current_file.parent.parent / "utils" / "models"),
+        "sentiment_models_directory": str(get_sentiment_model_paths()),
         "working_directory": str(Path.cwd()),
         "environment": {
             "PWD": os.getenv("PWD", "Not set"),
             "PYTHONPATH": os.getenv("PYTHONPATH", "Not set"),
+            "RAILWAY_ENVIRONMENT": os.getenv("RAILWAY_ENVIRONMENT", "Not set"),
         }
     }
 
@@ -280,15 +329,31 @@ def debug_structure():
 def debug_models():
     """Debug endpoint to list all available models"""
     project_root = get_project_root()
-    models_dir = project_root / "models"
     
-    prediction_models = []
-    if models_dir.exists():
-        try:
-            pkl_files = [f for f in models_dir.iterdir() if f.suffix == '.pkl']
-            prediction_models = [f.name for f in pkl_files]
-        except Exception as e:
-            prediction_models = [f"Error reading directory: {e}"]
+    # Check multiple possible locations
+    possible_model_dirs = [
+        project_root / "models",
+        project_root / "backend" / "models",
+        project_root.parent / "models",
+    ]
+    
+    all_models_info = []
+    
+    for models_dir in possible_model_dirs:
+        models_info = {
+            "directory": str(models_dir),
+            "exists": models_dir.exists(),
+            "models": []
+        }
+        
+        if models_dir.exists():
+            try:
+                pkl_files = [f for f in models_dir.iterdir() if f.suffix == '.pkl']
+                models_info["models"] = [f.name for f in pkl_files]
+            except Exception as e:
+                models_info["error"] = str(e)
+        
+        all_models_info.append(models_info)
     
     # Check sentiment models
     sentiment_models_dir = get_sentiment_model_paths()
@@ -301,9 +366,7 @@ def debug_models():
             sentiment_models = [f"Error reading directory: {e}"]
     
     return {
-        "prediction_models_directory": str(models_dir),
-        "prediction_models_exists": models_dir.exists(),
-        "prediction_models": prediction_models,
+        "prediction_models_locations": all_models_info,
         "sentiment_models_directory": str(sentiment_models_dir),
         "sentiment_models_exists": sentiment_models_dir.exists(),
         "sentiment_models": sentiment_models
@@ -316,21 +379,26 @@ def debug_model_check(symbol: str):
     model_path, scaler_path = get_model_paths(symbol)
     
     project_root = get_project_root()
-    models_dir = project_root / "models"
     
-    # List all .pkl files in models directory
+    # Check all possible model directories
+    possible_model_dirs = [
+        project_root / "models",
+        project_root / "backend" / "models",
+        project_root.parent / "models",
+    ]
+    
     available_models = []
-    if models_dir.exists():
-        try:
-            pkl_files = [f for f in models_dir.iterdir() if f.suffix == '.pkl']
-            available_models = [f.name for f in pkl_files]
-        except Exception as e:
-            available_models = [f"Error: {e}"]
+    for models_dir in possible_model_dirs:
+        if models_dir.exists():
+            try:
+                pkl_files = [f for f in models_dir.iterdir() if f.suffix == '.pkl']
+                available_models.extend([f"{models_dir.name}/{f.name}" for f in pkl_files])
+            except Exception as e:
+                available_models.append(f"Error in {models_dir}: {e}")
     
     return {
         "symbol": symbol,
-        "models_directory": str(models_dir),
-        "models_directory_exists": models_dir.exists(),
+        "project_root": str(project_root),
         "model_path": model_path,
         "scaler_path": scaler_path,
         "model_exists": os.path.exists(model_path),
@@ -424,10 +492,9 @@ def predict_stock_price(symbol: str):
         logger.error(f"❌ Model files not found for {symbol}: {str(e)}")
         
         project_root = get_project_root()
-        models_dir = project_root / "models"
         
         error_detail = (
-            f"Prediction model files for {symbol} not found in {models_dir}. "
+            f"Prediction model files for {symbol} not found. "
             f"Expected files: {symbol}_xg.pkl and {symbol}_scaler.pkl. "
             f"Use /debug/models to see available models or /debug/model-check/{symbol} for details."
         )
@@ -484,7 +551,7 @@ def predict_price_with_features(data: PredictRequest):
         
     except FileNotFoundError as e:
         logger.error(f"Model files not found for {data.ticker}: {str(e)}")
-        raise HTTPException(status_code=404, detail=f"Model files for {data.ticker} not found in root/models directory.")
+        raise HTTPException(status_code=404, detail=f"Model files for {data.ticker} not found.")
     except Exception as e:
         logger.error(f"Prediction error for {data.ticker}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
