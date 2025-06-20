@@ -14,8 +14,8 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 
 # Load sentiment models with correct paths - models are inside utils/models
-sentiment_model_path = os.path.join(script_dir, "models", "logistic_model.pkl")
-vectorizer_path = os.path.join(script_dir, "models", "tfidf_vectorizer.pkl")
+sentiment_model_path = os.path.join(script_dir, "model", "logistic_model.pkl")
+vectorizer_path = os.path.join(script_dir, "model", "tfidf_vectorizer.pkl")
 
 print(f"Looking for sentiment model at: {sentiment_model_path}")
 print(f"Looking for vectorizer at: {vectorizer_path}")
